@@ -2,14 +2,14 @@ import os
 from dotenv import load_dotenv
 import json
 import hashlib
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 import mysql.connector
 from mysql.connector import Error
 # import openai
 from pinecone import Pinecone, ServerlessSpec
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime
 import re
@@ -19,6 +19,7 @@ from difflib import SequenceMatcher
 import time
 from functools import lru_cache
 import Levenshtein
+import secrets
 
 # Load environment variables from .env file
 load_dotenv()
@@ -30,6 +31,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
+# Generate a secure secret key for sessions
+app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
+
 # Configuration
 class Config:
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'your-openai-api-key')
@@ -37,12 +41,6 @@ class Config:
     # print(PINECONE_API_KEY, "PINECONE_API_KEY ============>")
     PINECONE_INDEX_NAME = 'mysql-index-query'
     PINECONE_ENVIRONMENT = 'us-east-1'
-    
-    # MySQL Configuration
-    MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
-    MYSQL_USER = os.getenv('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'password')
-    MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', 'your_database')
     
     # Query Configuration
     MAX_QUERY_RESULTS = int(os.getenv('MAX_QUERY_RESULTS', '10000'))  # Maximum results to return
@@ -62,9 +60,78 @@ except Exception as e:
 # Initialize Pinecone
 pc = Pinecone(api_key=Config.PINECONE_API_KEY)
 
+# Connection manager to handle multiple database connections
+class ConnectionManager:
+    def __init__(self):
+        self.connections = {}
+    
+    def create_connection_id(self, host: str, user: str, database: str) -> str:
+        """Create a unique connection ID based on connection parameters"""
+        return hashlib.md5(f"{host}:{user}:{database}".encode()).hexdigest()
+    
+    def add_connection(self, connection_id: str, connection_params: Dict[str, str]) -> Optional[mysql.connector.MySQLConnection]:
+        """Create and store a new database connection"""
+        try:
+            connection = mysql.connector.connect(
+                host=connection_params['host'],
+                user=connection_params['user'],
+                password=connection_params['password'],
+                database=connection_params['database'],
+                autocommit=True
+            )
+            self.connections[connection_id] = {
+                'connection': connection,
+                'params': connection_params,
+                'created_at': datetime.now()
+            }
+            logger.info(f"Database connection established for ID: {connection_id}")
+            return connection
+        except Error as e:
+            logger.error(f"Error creating connection: {str(e)}")
+            raise e
+    
+    def get_connection(self, connection_id: str) -> Optional[mysql.connector.MySQLConnection]:
+        """Get an existing connection or None if not found"""
+        if connection_id in self.connections:
+            conn_info = self.connections[connection_id]
+            connection = conn_info['connection']
+            
+            # Check if connection is still alive
+            try:
+                if connection.is_connected():
+                    return connection
+                else:
+                    # Try to reconnect
+                    logger.info(f"Reconnecting for connection ID: {connection_id}")
+                    new_connection = self.add_connection(connection_id, conn_info['params'])
+                    return new_connection
+            except:
+                # Try to reconnect
+                logger.info(f"Connection lost, reconnecting for ID: {connection_id}")
+                try:
+                    new_connection = self.add_connection(connection_id, conn_info['params'])
+                    return new_connection
+                except:
+                    return None
+        return None
+    
+    def remove_connection(self, connection_id: str):
+        """Close and remove a connection"""
+        if connection_id in self.connections:
+            try:
+                conn = self.connections[connection_id]['connection']
+                if conn.is_connected():
+                    conn.close()
+                del self.connections[connection_id]
+                logger.info(f"Connection removed for ID: {connection_id}")
+            except Exception as e:
+                logger.error(f"Error removing connection: {str(e)}")
+
+# Initialize connection manager
+connection_manager = ConnectionManager()
+
 class MySQLSchemaProcessor:
     def __init__(self):
-        self.connection = None
         self.index = None
         self.initialize_pinecone()
         self.common_sql_terms = {
@@ -99,47 +166,28 @@ class MySQLSchemaProcessor:
             logger.error(f"Error initializing Pinecone: {str(e)}")
             raise
     
-    def connect_mysql(self):
-        """Establish MySQL connection"""
-        try:
-            self.connection = mysql.connector.connect(
-                host=Config.MYSQL_HOST,
-                user=Config.MYSQL_USER,
-                password=Config.MYSQL_PASSWORD,
-                database=Config.MYSQL_DATABASE,
-                autocommit=True
-            )
-            logger.info("MySQL connection established")
-            return True
-        except Error as e:
-            logger.error(f"Error connecting to MySQL: {str(e)}")
-            return False
+    def get_connection_from_session(self) -> Optional[mysql.connector.MySQLConnection]:
+        """Get the current database connection from session"""
+        connection_id = session.get('connection_id')
+        if not connection_id:
+            return None
+        return connection_manager.get_connection(connection_id)
     
-    def ensure_connection(self):
-        """Ensure MySQL connection is alive and reconnect if needed"""
-        try:
-            # Check if connection exists and is alive
-            if self.connection and self.connection.is_connected():
-                # Test the connection with a simple query
-                cursor = self.connection.cursor()
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
-                cursor.close()
-                return True
-        except:
-            logger.info("MySQL connection lost, attempting to reconnect...")
-        
-        # Connection is not alive, try to reconnect
-        return self.connect_mysql()
+    def ensure_connection(self) -> bool:
+        """Ensure database connection is available"""
+        connection = self.get_connection_from_session()
+        return connection is not None and connection.is_connected()
     
     def get_table_schema(self, table_name: str) -> Dict[str, Any]:
         """Get comprehensive table schema information"""
-        if not self.ensure_connection():
-            logger.error("Failed to establish database connection for schema retrieval")
+        connection = self.get_connection_from_session()
+        if not connection:
+            logger.error("No active database connection for schema retrieval")
             return {}
         
         try:
-            cursor = self.connection.cursor(dictionary=True)
+            cursor = connection.cursor(dictionary=True)
+            database_name = session.get('database_name', 'database')
             
             # Get column information
             cursor.execute(f"""
@@ -152,7 +200,7 @@ class MySQLSchemaProcessor:
                     EXTRA,
                     COLUMN_COMMENT
                 FROM INFORMATION_SCHEMA.COLUMNS 
-                WHERE TABLE_SCHEMA = '{Config.MYSQL_DATABASE}' 
+                WHERE TABLE_SCHEMA = '{database_name}' 
                 AND TABLE_NAME = '{table_name}'
                 ORDER BY ORDINAL_POSITION
             """)
@@ -165,7 +213,7 @@ class MySQLSchemaProcessor:
                     REFERENCED_TABLE_NAME,
                     REFERENCED_COLUMN_NAME
                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-                WHERE TABLE_SCHEMA = '{Config.MYSQL_DATABASE}'
+                WHERE TABLE_SCHEMA = '{database_name}'
                 AND TABLE_NAME = '{table_name}'
                 AND REFERENCED_TABLE_NAME IS NOT NULL
             """)
@@ -365,11 +413,12 @@ class MySQLSchemaProcessor:
     
     def execute_mysql_query(self, query: str) -> Dict[str, Any]:
         """Execute MySQL query safely with result limit handling"""
-        if not self.ensure_connection():
-            return {'error': 'Database connection failed'}
+        connection = self.get_connection_from_session()
+        if not connection:
+            return {'error': 'No active database connection'}
         
         try:
-            cursor = self.connection.cursor(dictionary=True)
+            cursor = connection.cursor(dictionary=True)
             
             # Basic query validation
             query = query.strip()
@@ -557,9 +606,10 @@ class MySQLSchemaProcessor:
                     return {'valid': False, 'error': f'Dangerous keyword {keyword} detected'}
             
             # Try to validate with MySQL syntax check (dry run) - but only if connection is available
-            if self.ensure_connection():
+            connection = self.get_connection_from_session()
+            if connection and connection.is_connected():
                 try:
-                    cursor = self.connection.cursor()
+                    cursor = connection.cursor()
                     # Use EXPLAIN to validate syntax without executing
                     explain_query = f"EXPLAIN {query}"
                     logger.info(f"Running EXPLAIN on query for validation")
@@ -647,11 +697,12 @@ class MySQLSchemaProcessor:
     
     def analyze_query_performance(self, query: str) -> Dict[str, Any]:
         """Analyze query performance and provide optimization suggestions"""
-        if not self.connection:
+        connection = self.get_connection_from_session()
+        if not connection:
             return {'error': 'No database connection'}
         
         try:
-            cursor = self.connection.cursor(dictionary=True)
+            cursor = connection.cursor(dictionary=True)
             
             # Get query execution plan
             cursor.execute(f"EXPLAIN {query}")
@@ -696,12 +747,18 @@ class MySQLSchemaProcessor:
     @lru_cache(maxsize=100)
     def get_table_context(self, table_name: str) -> List[str]:
         """Get table column names for spelling correction context"""
-        if not self.ensure_connection():
+        # Clear cache when a new connection is made
+        if hasattr(self, '_last_connection_id') and self._last_connection_id != session.get('connection_id'):
+            self.get_table_context.cache_clear()
+            self._last_connection_id = session.get('connection_id')
+        
+        connection = self.get_connection_from_session()
+        if not connection:
             logger.warning(f"Could not get table context for {table_name} - no database connection")
             return []
         
         try:
-            cursor = self.connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(f"DESCRIBE {table_name}")
             columns = [row[0] for row in cursor.fetchall()]
             cursor.close()
@@ -784,14 +841,141 @@ processor = MySQLSchemaProcessor()
 @app.route('/')
 def index():
     return render_template('index.html')
+
 @app.route('/flowchart')
 def flowchart():
     return render_template('flowchart.html')
+
+@app.route('/api/connect', methods=['POST'])
+def connect_database():
+    """Connect to a MySQL database with provided credentials"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['host', 'user', 'password', 'database']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        # Create connection parameters
+        connection_params = {
+            'host': data['host'],
+            'user': data['user'],
+            'password': data['password'],
+            'database': data['database']
+        }
+        
+        # Create connection ID
+        connection_id = connection_manager.create_connection_id(
+            data['host'], 
+            data['user'], 
+            data['database']
+        )
+        
+        # Try to establish connection
+        try:
+            connection = connection_manager.add_connection(connection_id, connection_params)
+            
+            # Store connection info in session
+            session['connection_id'] = connection_id
+            session['database_name'] = data['database']
+            
+            # Clear any cached data from previous connections
+            if hasattr(processor, 'get_table_context'):
+                processor.get_table_context.cache_clear()
+            
+            return jsonify({
+                'success': True,
+                'message': f"Connected to database '{data['database']}' successfully",
+                'database': data['database']
+            })
+            
+        except Error as e:
+            error_message = str(e)
+            if 'Access denied' in error_message:
+                return jsonify({'error': 'Access denied. Please check your username and password.'}), 401
+            elif 'Unknown database' in error_message:
+                return jsonify({'error': f"Database '{data['database']}' does not exist."}), 404
+            elif "Can't connect" in error_message:
+                return jsonify({'error': f"Cannot connect to MySQL server at '{data['host']}'. Please check the host and port."}), 503
+            else:
+                return jsonify({'error': f'Connection failed: {error_message}'}), 500
+                
+    except Exception as e:
+        logger.error(f"Error in connect_database: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/disconnect', methods=['POST'])
+def disconnect_database():
+    """Disconnect from the current database"""
+    try:
+        connection_id = session.get('connection_id')
+        
+        if connection_id:
+            connection_manager.remove_connection(connection_id)
+            session.pop('connection_id', None)
+            session.pop('database_name', None)
+            
+            # Clear any cached data
+            if hasattr(processor, 'get_table_context'):
+                processor.get_table_context.cache_clear()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Disconnected from database successfully'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'No active connection to disconnect'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error in disconnect_database: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/connection_status', methods=['GET'])
+def connection_status():
+    """Get current connection status"""
+    try:
+        connection_id = session.get('connection_id')
+        database_name = session.get('database_name')
+        
+        if not connection_id:
+            return jsonify({
+                'connected': False,
+                'message': 'No active database connection'
+            })
+        
+        connection = connection_manager.get_connection(connection_id)
+        if connection and connection.is_connected():
+            return jsonify({
+                'connected': True,
+                'database': database_name,
+                'message': f"Connected to '{database_name}'"
+            })
+        else:
+            # Connection lost, clean up session
+            session.pop('connection_id', None)
+            session.pop('database_name', None)
+            return jsonify({
+                'connected': False,
+                'message': 'Database connection lost'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error in connection_status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/process_table', methods=['POST'])
 def process_table():
     """Process and store table schema"""
     try:
+        # Check if connected
+        if not session.get('connection_id'):
+            return jsonify({'error': 'No active database connection. Please connect to a database first.'}), 401
+            
         data = request.get_json()
         table_name = data.get('table_name', '').strip()
         
@@ -816,6 +1000,10 @@ def process_table():
 def handle_query():
     """Handle user queries with enhanced validation and AI responses"""
     try:
+        # Check if connected
+        if not session.get('connection_id'):
+            return jsonify({'error': 'No active database connection. Please connect to a database first.'}), 401
+            
         data = request.get_json()
         user_question = data.get('question', '').strip()
         table_name = data.get('table_name', '').strip()
@@ -883,11 +1071,17 @@ def handle_query():
 def get_tables():
     """Get list of available tables"""
     try:
-        if not processor.ensure_connection():
-            return jsonify({'error': 'Database connection failed'}), 500
+        # Check if connected
+        if not session.get('connection_id'):
+            return jsonify({'error': 'No active database connection. Please connect to a database first.'}), 401
+            
+        connection = processor.get_connection_from_session()
+        if not connection:
+            return jsonify({'error': 'Database connection lost'}), 500
         
-        cursor = processor.connection.cursor()
-        cursor.execute(f"SHOW TABLES FROM {Config.MYSQL_DATABASE}")
+        cursor = connection.cursor()
+        database_name = session.get('database_name', 'database')
+        cursor.execute(f"SHOW TABLES FROM `{database_name}`")
         tables = [table[0] for table in cursor.fetchall()]
         cursor.close()
         

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MySQL Schema RAG System Flow</title>
+    <title>MySQL Schema RAG System - Detailed Flow</title>
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -14,11 +14,11 @@
         }
         
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
-            padding: 30px;
+            padding: 40px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             backdrop-filter: blur(10px);
         }
@@ -26,8 +26,8 @@
         h1 {
             text-align: center;
             color: #2d3748;
-            margin-bottom: 40px;
-            font-size: 2.5rem;
+            margin-bottom: 20px;
+            font-size: 2.8rem;
             font-weight: 700;
             background: linear-gradient(135deg, #667eea, #764ba2);
             -webkit-background-clip: text;
@@ -35,19 +35,27 @@
             background-clip: text;
         }
         
+        .subtitle {
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 40px;
+            font-size: 1.2rem;
+        }
+        
         .flow-container {
             display: flex;
             flex-direction: column;
-            gap: 30px;
+            gap: 35px;
         }
         
         .phase {
             background: linear-gradient(135deg, #f7fafc, #edf2f7);
             border-radius: 15px;
-            padding: 25px;
+            padding: 30px;
             border-left: 5px solid #667eea;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
         }
         
         .phase:hover {
@@ -56,34 +64,43 @@
         }
         
         .phase-title {
-            font-size: 1.4rem;
+            font-size: 1.6rem;
             font-weight: 600;
             color: #2d3748;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+        }
+        
+        .phase-description {
+            color: #64748b;
+            font-size: 0.95rem;
+            margin-bottom: 25px;
+            line-height: 1.6;
         }
         
         .phase-icon {
-            width: 30px;
-            height: 30px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
             color: white;
-            font-size: 14px;
+            font-size: 16px;
         }
         
-        .init { background: #48bb78; }
+        .connection { background: #48bb78; }
+        .discovery { background: #38b2ac; }
         .process { background: #ed8936; }
         .query { background: #4299e1; }
+        .response { background: #667eea; }
         
         .steps {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 20px;
         }
         
@@ -113,11 +130,28 @@
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
         }
         
+        .step-number {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
         .step-title {
             font-weight: 600;
             color: #2d3748;
             margin-bottom: 10px;
             font-size: 1.1rem;
+            padding-right: 30px;
         }
         
         .step-description {
@@ -152,31 +186,77 @@
             60% { transform: translateY(-5px); }
         }
         
+        .feature-box {
+            background: linear-gradient(135deg, #fff5f5, #fed7d7);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            border-left: 4px solid #f56565;
+        }
+        
+        .feature-box h4 {
+            margin: 0 0 10px 0;
+            color: #c53030;
+            font-size: 1rem;
+        }
+        
         .api-endpoints {
             background: linear-gradient(135deg, #e6fffa, #b2f5ea);
             border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
+            padding: 25px;
+            margin-top: 30px;
         }
         
         .endpoint {
             background: white;
-            margin: 10px 0;
-            padding: 15px;
+            margin: 12px 0;
+            padding: 18px;
             border-radius: 8px;
             border-left: 4px solid #38b2ac;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
         
         .endpoint-method {
             font-weight: bold;
-            color: #38b2ac;
+            color: white;
+            background: #38b2ac;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            color: #2d3748;
+            font-weight: 600;
+        }
+        
+        .endpoint-description {
+            color: #4a5568;
+            font-size: 0.9rem;
+            margin-left: 4px;
+        }
+        
+        .endpoint-details {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-left: 4px;
+            line-height: 1.5;
         }
         
         .data-flow {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin: 20px 0;
+            margin: 30px 0;
             flex-wrap: wrap;
             gap: 15px;
         }
@@ -184,70 +264,143 @@
         .data-box {
             background: linear-gradient(135deg, #fff5f5, #fed7d7);
             border-radius: 10px;
-            padding: 15px;
+            padding: 18px;
             text-align: center;
-            min-width: 150px;
+            min-width: 160px;
             border: 2px solid #feb2b2;
+            flex: 1;
         }
         
         .arrow-right {
             font-size: 1.5rem;
             color: #667eea;
+            flex: 0 0 auto;
+        }
+        
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .tech-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        
+        .tech-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+        
+        .tech-item h4 {
+            margin: 0 0 8px 0;
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+        
+        .tech-item p {
+            margin: 0;
+            color: #4a5568;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            margin: 10px 0;
+            border-radius: 6px;
+        }
+        
+        .info-box {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            margin: 10px 0;
+            border-radius: 6px;
         }
         
         @media (max-width: 768px) {
-            .container { padding: 15px; }
-            h1 { font-size: 2rem; }
+            .container { padding: 20px; }
+            h1 { font-size: 2.2rem; }
+            .subtitle { font-size: 1rem; }
             .steps { grid-template-columns: 1fr; }
             .data-flow { flex-direction: column; }
             .arrow-right { transform: rotate(90deg); }
+            .phase { padding: 20px; }
+            .tech-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔄 MySQL Schema RAG System Flow</h1>
+        <h1>🔄 MySQL Schema RAG System - Detailed Flow</h1>
+        <p class="subtitle">A comprehensive Natural Language to SQL query system using Retrieval-Augmented Generation</p>
         
-        <!-- Phase 1: System Initialization -->
+        <!-- Phase 1: Database Connection -->
         <div class="phase">
             <div class="phase-title">
-                <div class="phase-icon init">1</div>
-                System Initialization & Setup
+                <div class="phase-icon connection">1</div>
+                Database Connection Management
+            </div>
+            <div class="phase-description">
+                Establish and manage multiple MySQL database connections with session-based tracking
             </div>
             <div class="steps">
                 <div class="step">
-                    <div class="step-title">🔧 Environment Setup</div>
+                    <span class="step-number">1</span>
+                    <div class="step-title">🔐 User Authentication</div>
                     <div class="step-description">
-                        Load environment variables (.env file) containing API keys and database credentials.
-                        <div class="code-snippet">load_dotenv()
-Config.OPENAI_API_KEY
-Config.PINECONE_API_KEY
-Config.MYSQL_*</div>
+                        User provides MySQL credentials through secure web interface.
+                        <div class="code-snippet">POST /api/connect
+{
+  "host": "localhost",
+  "user": "root",
+  "password": "****",
+  "database": "your_db"
+}</div>
+                        <div class="info-box">
+                            <strong>Security:</strong> Passwords are handled securely and cleared from UI after connection
+                        </div>
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">🤖 AI Services Init</div>
+                    <span class="step-number">2</span>
+                    <div class="step-title">🔗 Connection Manager</div>
                     <div class="step-description">
-                        Initialize OpenAI client for embeddings and chat completions, and Pinecone for vector storage.
-                        <div class="code-snippet">client = OpenAI()
-pc = Pinecone(api_key=Config.PINECONE_API_KEY)</div>
+                        ConnectionManager creates unique connection ID using MD5 hash of connection parameters.
+                        <div class="code-snippet">connection_id = hashlib.md5(
+  f"{host}:{user}:{database}".encode()
+).hexdigest()</div>
+                        Connections are stored with metadata and automatically reconnected if lost.
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">📊 Pinecone Index Setup</div>
+                    <span class="step-number">3</span>
+                    <div class="step-title">📊 Session Management</div>
                     <div class="step-description">
-                        Create or connect to Pinecone index with 3072 dimensions (text-embedding-3-large) using cosine similarity.
-                        <div class="code-snippet">dimension=3072, metric='cosine'
-spec=ServerlessSpec(cloud='aws', region='us-east-1')</div>
-                    </div>
-                </div>
-                
-                <div class="step">
-                    <div class="step-title">🗄️ MySQL Connection</div>
-                    <div class="step-description">
-                        Establish connection to MySQL database using provided credentials.
+                        Connection ID and database name stored in Flask session for persistent access across requests.
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>Automatic connection validation</li>
+                            <li>Connection pooling support</li>
+                            <li>Graceful reconnection handling</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -255,61 +408,118 @@ spec=ServerlessSpec(cloud='aws', region='us-east-1')</div>
         
         <div class="arrow">⬇️</div>
         
-        <!-- Phase 2: Schema Processing -->
+        <!-- Phase 2: Table Discovery -->
         <div class="phase">
             <div class="phase-title">
-                <div class="phase-icon process">2</div>
-                Schema Processing & Vectorization
+                <div class="phase-icon discovery">2</div>
+                Table Discovery & Selection
+            </div>
+            <div class="phase-description">
+                Explore available tables in the connected database and select target for analysis
             </div>
             <div class="steps">
                 <div class="step">
-                    <div class="step-title">📋 Schema Extraction</div>
+                    <span class="step-number">1</span>
+                    <div class="step-title">📋 Load Available Tables</div>
                     <div class="step-description">
-                        Extract comprehensive table schema information from MySQL INFORMATION_SCHEMA.
-                        <div class="code-snippet">SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE...
-FROM INFORMATION_SCHEMA.COLUMNS</div>
-                        <strong>Collected Data:</strong>
+                        Retrieve all tables from the connected database.
+                        <div class="code-snippet">SHOW TABLES FROM `database_name`</div>
+                        Tables are displayed in an interactive sidebar list with click-to-select functionality.
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <div class="step-title">🎯 Table Selection</div>
+                    <div class="step-description">
+                        User selects a table either by:
                         <ul style="margin: 10px 0; padding-left: 20px;">
-                            <li>Column details (name, type, nullable, default)</li>
+                            <li>Clicking from the loaded tables list</li>
+                            <li>Manually entering table name</li>
+                            <li>Auto-populated from previous selection</li>
+                        </ul>
+                        Mobile-optimized with automatic sidebar collapse after selection.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="arrow">⬇️</div>
+        
+        <!-- Phase 3: Schema Processing -->
+        <div class="phase">
+            <div class="phase-title">
+                <div class="phase-icon process">3</div>
+                Intelligent Schema Processing & Vectorization
+            </div>
+            <div class="phase-description">
+                Extract, analyze, and vectorize comprehensive table schema information for semantic search
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <div class="step-title">📊 Schema Extraction</div>
+                    <div class="step-description">
+                        Extract comprehensive table metadata from INFORMATION_SCHEMA:
+                        <div class="code-snippet">SELECT COLUMN_NAME, DATA_TYPE, 
+IS_NULLABLE, COLUMN_DEFAULT, 
+COLUMN_KEY, EXTRA, COLUMN_COMMENT
+FROM INFORMATION_SCHEMA.COLUMNS</div>
+                        <strong>Additional Data:</strong>
+                        <ul style="margin: 8px 0; padding-left: 20px; font-size: 0.9rem;">
                             <li>Foreign key relationships</li>
-                            <li>Indexes and constraints</li>
+                            <li>Index information</li>
                             <li>Sample data (first 5 rows)</li>
-                            <li>Table row count</li>
+                            <li>Total row count</li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">✂️ Data Chunking</div>
+                    <span class="step-number">2</span>
+                    <div class="step-title">✂️ Smart Data Chunking</div>
                     <div class="step-description">
-                        Break schema information into meaningful chunks for better retrieval.
-                        <div class="code-snippet">Chunk Types:
-- main_schema: Table structure & columns
-- foreign_keys: Relationship information  
-- sample_data: Example records</div>
+                        Schema information is intelligently chunked for optimal retrieval:
+                        <div class="feature-box">
+                            <h4>Chunk Types:</h4>
+                            <ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9rem;">
+                                <li><strong>main_schema:</strong> Table structure, columns, data types</li>
+                                <li><strong>foreign_keys:</strong> Relationship mappings</li>
+                                <li><strong>sample_data:</strong> Example records for context</li>
+                            </ul>
+                        </div>
+                        Each chunk has unique ID: <code>{table_name}_{chunk_type}</code>
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">🧮 Embedding Generation</div>
+                    <span class="step-number">3</span>
+                    <div class="step-title">🧮 OpenAI Embeddings</div>
                     <div class="step-description">
-                        Convert each chunk into vector embeddings using OpenAI's text-embedding-3-large model.
-                        <div class="code-snippet">response = client.embeddings.create(
-    model="text-embedding-3-large",
-    input=chunk_content
-)</div>
+                        Generate high-dimensional vector embeddings for semantic understanding:
+                        <div class="code-snippet">model="text-embedding-3-large"
+dimension=3072
+encoding="cl100k_base"</div>
+                        Embeddings capture semantic meaning of schema structure and relationships.
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">💾 Vector Storage</div>
+                    <span class="step-number">4</span>
+                    <div class="step-title">💾 Pinecone Storage</div>
                     <div class="step-description">
-                        Store embeddings in Pinecone with metadata for efficient similarity search.
-                        <div class="code-snippet">vector = {
-    'id': chunk['id'],
-    'values': embedding,
-    'metadata': {...}
+                        Store vectors in Pinecone serverless index with rich metadata:
+                        <div class="code-snippet">{
+  'id': chunk_id,
+  'values': embedding_vector,
+  'metadata': {
+    'table_name': table,
+    'chunk_type': type,
+    'content': text,
+    'timestamp': ISO-8601
+  }
 }</div>
+                        <span class="highlight">Cosine similarity</span> metric for accurate semantic matching.
                     </div>
                 </div>
             </div>
@@ -317,127 +527,401 @@ FROM INFORMATION_SCHEMA.COLUMNS</div>
         
         <div class="arrow">⬇️</div>
         
-        <!-- Phase 3: Query Processing -->
+        <!-- Phase 4: Query Processing -->
         <div class="phase">
             <div class="phase-title">
-                <div class="phase-icon query">3</div>
-                Query Processing & Execution
+                <div class="phase-icon query">4</div>
+                Advanced Query Processing & SQL Generation
+            </div>
+            <div class="phase-description">
+                Transform natural language questions into precise SQL queries with intelligent retry and validation
             </div>
             <div class="steps">
                 <div class="step">
-                    <div class="step-title">❓ User Query Input</div>
+                    <span class="step-number">1</span>
+                    <div class="step-title">💬 Natural Language Input</div>
                     <div class="step-description">
-                        User submits natural language question about data along with target table name.
-                        <div class="code-snippet">POST /api/query
-{
-    "question": "Show me all users created this month",
-    "table_name": "users"
-}</div>
+                        User enters question in plain English through chat interface:
+                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>Auto-resizing textarea for long queries</li>
+                            <li>Enter to send, Shift+Enter for new line</li>
+                            <li>Mobile-optimized input handling</li>
+                        </ul>
+                        Example: <em>"Show me details of user moni@gmail.com"</em>
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">🔍 Semantic Search</div>
+                    <span class="step-number">2</span>
+                    <div class="step-title">✏️ Smart Spell Correction</div>
                     <div class="step-description">
-                        Convert user question to embedding and search Pinecone for relevant schema information.
-                        <div class="code-snippet">query_embedding = create_embeddings(user_question)
-matches = index.query(
-    vector=query_embedding,
-    top_k=3,
-    filter={'table_name': table_name}
+                        Intelligent spelling correction that preserves special patterns:
+                        <div class="code-snippet">correct_spelling_smart(question, table_columns)</div>
+                        <div class="info-box">
+                            <strong>Features:</strong>
+                            <ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9rem;">
+                                <li>Preserves email addresses & URLs</li>
+                                <li>Levenshtein distance matching</li>
+                                <li>Context-aware SQL term correction</li>
+                                <li>Column name fuzzy matching</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <div class="step-title">🔍 Semantic Schema Search</div>
+                    <div class="step-description">
+                        Query embedding matched against stored schema vectors:
+                        <div class="code-snippet">index.query(
+  vector=query_embedding,
+  top_k=3,
+  filter={'table_name': table},
+  include_metadata=True
 )</div>
+                        Retrieves most relevant schema chunks for context-aware SQL generation.
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">🤖 SQL Generation</div>
+                    <span class="step-number">4</span>
+                    <div class="step-title">🤖 GPT-4 SQL Generation</div>
                     <div class="step-description">
-                        Use OpenAI GPT-4 with retrieved schema context to generate precise SQL query.
-                        <div class="code-snippet">prompt = f"""
-Database Schema Context: {context}
-User Question: {user_question}
-Generate MySQL SELECT query...
-"""</div>
+                        Advanced SQL generation with retry logic:
+                        <div class="warning-box">
+                            <strong>Retry Logic:</strong> Up to 3 attempts with error context for self-correction
+                        </div>
+                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>Schema-aware query generation</li>
+                            <li>Exact value preservation (emails, IDs)</li>
+                            <li>Proper JOIN inference</li>
+                            <li>Safety validation</li>
+                        </ul>
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">⚡ Query Execution</div>
+                    <span class="step-number">5</span>
+                    <div class="step-title">🛡️ SQL Validation</div>
                     <div class="step-description">
-                        Execute generated SQL query against MySQL database with safety validation.
-                        <div class="code-snippet">if query.upper().startswith('SELECT'):
-    cursor.execute(query)
-    results = cursor.fetchall()</div>
+                        Multi-layer query validation for safety and correctness:
+                        <ol style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>SQL syntax parsing with sqlparse</li>
+                            <li>Dangerous keyword detection</li>
+                            <li>SELECT-only enforcement</li>
+                            <li>EXPLAIN validation (when connected)</li>
+                        </ol>
+                        <span class="highlight">Word boundary regex</span> prevents false positives in column names.
                     </div>
                 </div>
                 
                 <div class="step">
-                    <div class="step-title">📤 Response Delivery</div>
+                    <span class="step-number">6</span>
+                    <div class="step-title">⚡ Safe Query Execution</div>
                     <div class="step-description">
-                        Return results with generated query, data, and metadata to user.
-                        <div class="code-snippet">{
-    "success": true,
-    "generated_query": "SELECT...",
-    "results": [...],
-    "row_count": 42
-}</div>
+                        Execute validated queries with built-in safety limits:
+                        <div class="code-snippet">DEFAULT_QUERY_LIMIT = 1000
+MAX_QUERY_RESULTS = 10000</div>
+                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>Automatic LIMIT injection if missing</li>
+                            <li>Total count calculation</li>
+                            <li>Performance metrics tracking</li>
+                            <li>Connection health monitoring</li>
+                        </ul>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Data Flow Visualization -->
+        <div class="arrow">⬇️</div>
+        
+        <!-- Phase 5: Response Generation -->
+        <div class="phase">
+            <div class="phase-title">
+                <div class="phase-icon response">5</div>
+                Intelligent Response Generation & Delivery
+            </div>
+            <div class="phase-description">
+                Transform raw query results into insightful, natural language responses with export capabilities
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <div class="step-title">🤖 AI Response Enhancement</div>
+                    <div class="step-description">
+                        GPT-4 analyzes results to provide natural language insights:
+                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>Direct answer to user's question</li>
+                            <li>Key patterns and insights</li>
+                            <li>Data summarization</li>
+                            <li>Follow-up question suggestions</li>
+                        </ul>
+                        <div class="info-box">
+                            <strong>Format:</strong> Plain text with proper paragraphs, bullet points, and structure
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <div class="step-title">📊 Result Formatting</div>
+                    <div class="step-description">
+                        Adaptive display based on result count:
+                        <div class="feature-box">
+                            <h4>Display Logic:</h4>
+                            <ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9rem;">
+                                <li><strong>Single result:</strong> Detailed field-by-field view</li>
+                                <li><strong>Multiple results:</strong> Key fields summary (top 10)</li>
+                                <li><strong>Large datasets:</strong> Preview with export prompt</li>
+                            </ul>
+                        </div>
+                        Smart field identification prioritizes important columns.
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <div class="step-title">📈 Performance Analysis</div>
+                    <div class="step-description">
+                        Query performance metrics and optimization suggestions:
+                        <div class="code-snippet">EXPLAIN FORMAT=JSON {query}</div>
+                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>Execution time tracking</li>
+                            <li>Full table scan detection</li>
+                            <li>Missing index identification</li>
+                            <li>Filesort and temporary table warnings</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <div class="step-title">💾 Export Capabilities</div>
+                    <div class="step-description">
+                        One-click export to multiple formats:
+                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li><strong>CSV:</strong> Excel-compatible with proper escaping</li>
+                            <li><strong>JSON:</strong> Pretty-printed with 2-space indent</li>
+                            <li>Automatic filename generation with timestamp</li>
+                            <li>Client-side blob generation for privacy</li>
+                        </ul>
+                        Results cached in memory for instant export.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Complete Data Flow -->
         <div class="api-endpoints">
-            <h3 style="margin-top: 0; color: #2d3748;">🔄 Complete Data Flow</h3>
+            <h3 style="margin-top: 0; color: #2d3748;">🔄 Complete System Data Flow</h3>
             <div class="data-flow">
                 <div class="data-box">
-                    <strong>Natural Language</strong><br>
-                    "Show recent orders"
+                    <strong>User Input</strong><br>
+                    Natural Language<br>
+                    <em style="font-size: 0.85rem;">"Find user details"</em>
                 </div>
                 <div class="arrow-right">→</div>
                 <div class="data-box">
-                    <strong>Vector Search</strong><br>
-                    Schema Context
+                    <strong>Spell Check</strong><br>
+                    Smart Correction<br>
+                    <em style="font-size: 0.85rem;">Context-aware</em>
                 </div>
                 <div class="arrow-right">→</div>
                 <div class="data-box">
-                    <strong>AI Generation</strong><br>
-                    SQL Query
+                    <strong>Embedding</strong><br>
+                    Vector Search<br>
+                    <em style="font-size: 0.85rem;">3072 dimensions</em>
                 </div>
                 <div class="arrow-right">→</div>
                 <div class="data-box">
-                    <strong>Database</strong><br>
-                    Execution Results
+                    <strong>SQL Generation</strong><br>
+                    GPT-4 + Retry<br>
+                    <em style="font-size: 0.85rem;">Schema context</em>
+                </div>
+                <div class="arrow-right">→</div>
+                <div class="data-box">
+                    <strong>Execution</strong><br>
+                    Safe Query<br>
+                    <em style="font-size: 0.85rem;">With limits</em>
+                </div>
+                <div class="arrow-right">→</div>
+                <div class="data-box">
+                    <strong>AI Response</strong><br>
+                    Natural Language<br>
+                    <em style="font-size: 0.85rem;">+ Export options</em>
                 </div>
             </div>
         </div>
         
         <!-- API Endpoints -->
         <div class="api-endpoints">
-            <h3 style="margin-top: 0; color: #2d3748;">🛠️ API Endpoints</h3>
+            <h3 style="margin-top: 0; color: #2d3748;">🛠️ API Endpoints Reference</h3>
+            
             <div class="endpoint">
-                <span class="endpoint-method">POST</span> /api/process_table
-                <div style="margin-top: 5px; color: #4a5568;">Process and vectorize table schema information</div>
+                <div class="endpoint-header">
+                    <span class="endpoint-method">POST</span>
+                    <span class="endpoint-path">/api/connect</span>
+                </div>
+                <div class="endpoint-description">Establish MySQL database connection</div>
+                <div class="endpoint-details">
+                    <strong>Request:</strong> {host, user, password, database}<br>
+                    <strong>Response:</strong> {success, message, database}<br>
+                    <strong>Session:</strong> Stores connection_id and database_name
+                </div>
             </div>
+            
             <div class="endpoint">
-                <span class="endpoint-method">POST</span> /api/query  
-                <div style="margin-top: 5px; color: #4a5568;">Handle natural language queries and return SQL results</div>
+                <div class="endpoint-header">
+                    <span class="endpoint-method">POST</span>
+                    <span class="endpoint-path">/api/disconnect</span>
+                </div>
+                <div class="endpoint-description">Close current database connection</div>
+                <div class="endpoint-details">
+                    <strong>Response:</strong> {success, message}<br>
+                    <strong>Action:</strong> Clears session and connection cache
+                </div>
             </div>
+            
             <div class="endpoint">
-                <span class="endpoint-method">GET</span> /api/get_tables
-                <div style="margin-top: 5px; color: #4a5568;">Retrieve list of available database tables</div>
+                <div class="endpoint-header">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-path">/api/connection_status</span>
+                </div>
+                <div class="endpoint-description">Check current connection health</div>
+                <div class="endpoint-details">
+                    <strong>Response:</strong> {connected, database, message}<br>
+                    <strong>Auto-recovery:</strong> Attempts reconnection if needed
+                </div>
+            </div>
+            
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-path">/api/get_tables</span>
+                </div>
+                <div class="endpoint-description">List all tables in connected database</div>
+                <div class="endpoint-details">
+                    <strong>Response:</strong> {tables: string[]}<br>
+                    <strong>Query:</strong> SHOW TABLES FROM database
+                </div>
+            </div>
+            
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">POST</span>
+                    <span class="endpoint-path">/api/process_table</span>
+                </div>
+                <div class="endpoint-description">Analyze and vectorize table schema</div>
+                <div class="endpoint-details">
+                    <strong>Request:</strong> {table_name}<br>
+                    <strong>Actions:</strong> Extract schema → Chunk → Embed → Store in Pinecone<br>
+                    <strong>Response:</strong> {success, message}
+                </div>
+            </div>
+            
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">POST</span>
+                    <span class="endpoint-path">/api/query</span>
+                </div>
+                <div class="endpoint-description">Process natural language query</div>
+                <div class="endpoint-details">
+                    <strong>Request:</strong> {question, table_name}<br>
+                    <strong>Response:</strong> {
+                        success, generated_query, results[], row_count,
+                        ai_summary, performance: {execution_time, suggestions}
+                    }<br>
+                    <strong>Features:</strong> Spell correction, retry logic, performance analysis
+                </div>
             </div>
         </div>
         
-        <!-- Key Technologies -->
-        <div style="background: linear-gradient(135deg, #f0fff4, #c6f6d5); border-radius: 10px; padding: 20px; margin-top: 20px;">
-            <h3 style="margin-top: 0; color: #2d3748;">🔧 Key Technologies Used</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                <div><strong>🤖 OpenAI:</strong> Embeddings & Chat completions</div>
-                <div><strong>📊 Pinecone:</strong> Vector database for similarity search</div>
-                <div><strong>🗄️ MySQL:</strong> Relational database source</div>
-                <div><strong>🌐 Flask:</strong> Web framework & API server</div>
-                <div><strong>🔍 RAG:</strong> Retrieval-augmented generation pattern</div>
+        <!-- Technology Stack -->
+        <div style="background: linear-gradient(135deg, #f0fff4, #c6f6d5); border-radius: 10px; padding: 25px; margin-top: 30px;">
+            <h3 style="margin-top: 0; color: #2d3748;">🔧 Technology Stack & Architecture</h3>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <h4>🤖 OpenAI Integration</h4>
+                    <p>• GPT-4 for SQL generation<br>
+                    • text-embedding-3-large for vectors<br>
+                    • Intelligent retry with context<br>
+                    • Natural language responses</p>
+                </div>
+                
+                <div class="tech-item">
+                    <h4>📊 Pinecone Vector DB</h4>
+                    <p>• Serverless deployment (AWS)<br>
+                    • 3072-dimensional vectors<br>
+                    • Cosine similarity search<br>
+                    • Metadata filtering</p>
+                </div>
+                
+                <div class="tech-item">
+                    <h4>🗄️ MySQL Backend</h4>
+                    <p>• Connection pooling<br>
+                    • Session management<br>
+                    • INFORMATION_SCHEMA queries<br>
+                    • Safe query execution</p>
+                </div>
+                
+                <div class="tech-item">
+                    <h4>🌐 Flask Framework</h4>
+                    <p>• RESTful API design<br>
+                    • Session-based auth<br>
+                    • CORS enabled<br>
+                    • Error handling</p>
+                </div>
+                
+                <div class="tech-item">
+                    <h4>🎨 Frontend Stack</h4>
+                    <p>• Vanilla JavaScript<br>
+                    • Responsive design<br>
+                    • Mobile optimized<br>
+                    • Real-time updates</p>
+                </div>
+                
+                <div class="tech-item">
+                    <h4>🔐 Security Features</h4>
+                    <p>• SQL injection prevention<br>
+                    • Query validation<br>
+                    • Result limiting<br>
+                    • Session security</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Key Features Summary -->
+        <div style="background: linear-gradient(135deg, #fef3c7, #fed7c7); border-radius: 10px; padding: 25px; margin-top: 30px;">
+            <h3 style="margin-top: 0; color: #2d3748;">✨ Key System Features</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                <div>
+                    <h4 style="color: #92400e; margin-bottom: 10px;">🧠 Intelligent Processing</h4>
+                    <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li>Context-aware spell correction</li>
+                        <li>Smart retry logic with error learning</li>
+                        <li>Adaptive result formatting</li>
+                        <li>Performance optimization suggestions</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 style="color: #92400e; margin-bottom: 10px;">🛡️ Safety & Reliability</h4>
+                    <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li>Multi-layer SQL validation</li>
+                        <li>Automatic query limiting</li>
+                        <li>Connection health monitoring</li>
+                        <li>Graceful error handling</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 style="color: #92400e; margin-bottom: 10px;">📱 User Experience</h4>
+                    <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li>Mobile-responsive design</li>
+                        <li>Real-time status updates</li>
+                        <li>One-click data export</li>
+                        <li>Natural language interactions</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>

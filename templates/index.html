@@ -161,6 +161,29 @@
             box-shadow: var(--shadow-sm);
         }
 
+        .btn-danger {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .connection-info {
+            padding: 16px;
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .connection-info strong {
+            color: var(--primary-color);
+        }
+
         .tables-list {
             max-height: 300px;
             overflow-y: auto;
@@ -213,6 +236,11 @@
         .status-info {
             background-color: rgba(99, 102, 241, 0.1);
             color: var(--primary-color);
+        }
+
+        .status-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
         }
 
         /* Main Content Styles */
@@ -347,6 +375,23 @@
             border-radius: 16px;
             border-bottom-left-radius: 4px;
             box-shadow: var(--shadow-sm);
+        }
+
+        /* Hide/Show sections based on connection status */
+        .connection-required {
+            display: none;
+        }
+
+        .connected .connection-required {
+            display: block;
+        }
+
+        .connected .connection-form {
+            display: none;
+        }
+
+        .connection-form {
+            display: block;
         }
 
         /* Data Display Styles */
@@ -1062,8 +1107,75 @@
 
             <div class="sidebar-content">
                 <!-- Database Connection -->
-                <div class="sidebar-section">
-                    <h3 class="section-title">Database Setup</h3>
+                <div class="sidebar-section connection-form">
+                    <h3 class="section-title">Database Connection</h3>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="dbHost">Host</label>
+                        <input 
+                            type="text" 
+                            id="dbHost" 
+                            class="form-input" 
+                            placeholder="localhost"
+                            value="localhost"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="dbUser">Username</label>
+                        <input 
+                            type="text" 
+                            id="dbUser" 
+                            class="form-input" 
+                            placeholder="root"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="dbPassword">Password</label>
+                        <input 
+                            type="password" 
+                            id="dbPassword" 
+                            class="form-input" 
+                            placeholder="Enter password"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="dbName">Database Name</label>
+                        <input 
+                            type="text" 
+                            id="dbName" 
+                            class="form-input" 
+                            placeholder="your_database"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <button id="connectBtn" class="btn btn-primary">
+                            <i class="fas fa-plug"></i>
+                            Connect to Database
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Connection Info -->
+                <div class="sidebar-section connection-required" style="display: none;">
+                    <h3 class="section-title">Connection Info</h3>
+                    <div id="connectionInfo" class="connection-info">
+                        <!-- Connection details will be shown here -->
+                    </div>
+                    <div class="form-group">
+                        <button id="disconnectBtn" class="btn btn-danger">
+                            <i class="fas fa-unlink"></i>
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table Setup -->
+                <div class="sidebar-section connection-required" style="display: none;">
+                    <h3 class="section-title">Table Setup</h3>
                 
                 <div class="form-group">
                         <label class="form-label" for="tableInput">Table Name</label>
@@ -1091,7 +1203,7 @@
                 </div>
 
                 <!-- Available Tables -->
-                <div class="sidebar-section">
+                <div class="sidebar-section connection-required" style="display: none;">
                     <h3 class="section-title">Available Tables</h3>
                     <div id="tablesList" class="tables-list">
                         <div class="table-item" style="text-align: center; color: var(--text-secondary);">
@@ -1105,7 +1217,7 @@
                     <h3 class="section-title">Status</h3>
                     <div id="statusIndicator" class="status-badge status-info">
                         <i class="fas fa-info-circle"></i>
-                        Ready to connect
+                        Not connected
                     </div>
                 </div>
             </div>
@@ -1135,6 +1247,7 @@
                                     <br>
                                     <p><strong>To get started:</strong></p>
                                     <ol style="margin-left: 20px; margin-top: 10px;">
+                                        <li>Connect to your MySQL database using the connection form in the sidebar</li>
                                         <li>Enter your table name or click "Load Tables" to see available tables</li>
                                         <li>Click "Process Table" to analyze the table structure</li>
                                         <li>Ask me anything about your data in plain English!</li>
@@ -1178,11 +1291,22 @@
                 this.currentTable = '';
                 this.resultsCache = {};
                 this.sidebarCollapsed = false;
+                this.isConnected = false;
                 this.initializeEventListeners();
                 this.initializeMobileMenu();
+                this.checkConnectionStatus();
             }
 
             initializeEventListeners() {
+                // Database connection buttons
+                document.getElementById('connectBtn').addEventListener('click', () => {
+                    this.connectToDatabase();
+                });
+
+                document.getElementById('disconnectBtn').addEventListener('click', () => {
+                    this.disconnectFromDatabase();
+                });
+
                 // Process table button
                 document.getElementById('processTableBtn').addEventListener('click', () => {
                     this.processTable();
@@ -1218,8 +1342,155 @@
                         this.processTable();
                     }
                 });
+
+                // Database connection form enter key
+                ['dbHost', 'dbUser', 'dbPassword', 'dbName'].forEach(id => {
+                    document.getElementById(id).addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            this.connectToDatabase();
+                        }
+                    });
+                });
             }
             
+            async checkConnectionStatus() {
+                try {
+                    const response = await fetch('/api/connection_status');
+                    const data = await response.json();
+                    
+                    if (data.connected) {
+                        this.isConnected = true;
+                        this.updateUIForConnection(true, data.database);
+                        this.updateStatus(`Connected to ${data.database}`, 'success');
+                    } else {
+                        this.isConnected = false;
+                        this.updateUIForConnection(false);
+                        this.updateStatus('Not connected', 'info');
+                    }
+                } catch (error) {
+                    console.error('Error checking connection status:', error);
+                    this.isConnected = false;
+                    this.updateUIForConnection(false);
+                }
+            }
+
+            async connectToDatabase() {
+                const connectBtn = document.getElementById('connectBtn');
+                const host = document.getElementById('dbHost').value.trim();
+                const user = document.getElementById('dbUser').value.trim();
+                const password = document.getElementById('dbPassword').value;
+                const database = document.getElementById('dbName').value.trim();
+
+                if (!host || !user || !database) {
+                    this.updateStatus('Please fill in all required fields', 'error');
+                    return;
+                }
+
+                connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+                connectBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/connect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            host: host,
+                            user: user,
+                            password: password,
+                            database: database
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        this.isConnected = true;
+                        this.updateUIForConnection(true, database);
+                        this.updateStatus(data.message, 'success');
+                        this.addAssistantMessage(`Successfully connected to database <strong>${database}</strong>! You can now load tables and start exploring your data.`);
+                        
+                        // Clear password field for security
+                        document.getElementById('dbPassword').value = '';
+                        
+                        // On mobile, collapse sidebar after successful connection
+                        if (window.innerWidth <= 768 && !this.sidebarCollapsed) {
+                            setTimeout(() => this.toggleSidebar(), 500);
+                        }
+                    } else {
+                        this.updateStatus(data.error || 'Connection failed', 'error');
+                        this.addAssistantMessage(`Failed to connect to database: ${data.error || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error('Error connecting to database:', error);
+                    this.updateStatus('Connection error', 'error');
+                    this.addAssistantMessage('Failed to connect to database. Please check your connection settings and try again.');
+                } finally {
+                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect to Database';
+                    connectBtn.disabled = false;
+                }
+            }
+
+            async disconnectFromDatabase() {
+                const disconnectBtn = document.getElementById('disconnectBtn');
+                
+                disconnectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Disconnecting...';
+                disconnectBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/disconnect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        this.isConnected = false;
+                        this.currentTable = '';
+                        this.updateUIForConnection(false);
+                        this.updateStatus('Disconnected', 'info');
+                        this.addAssistantMessage('Disconnected from database successfully.');
+                        
+                        // Clear table input
+                        document.getElementById('tableInput').value = '';
+                        
+                        // Clear tables list
+                        document.getElementById('tablesList').innerHTML = '<div class="table-item" style="text-align: center; color: var(--text-secondary);">No tables loaded</div>';
+                    } else {
+                        this.updateStatus('Failed to disconnect', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error disconnecting:', error);
+                    this.updateStatus('Disconnect error', 'error');
+                } finally {
+                    disconnectBtn.innerHTML = '<i class="fas fa-unlink"></i> Disconnect';
+                    disconnectBtn.disabled = false;
+                }
+            }
+
+            updateUIForConnection(connected, database = '') {
+                const connectionForm = document.querySelector('.connection-form');
+                const connectionRequired = document.querySelectorAll('.connection-required');
+                const connectionInfo = document.getElementById('connectionInfo');
+
+                if (connected) {
+                    connectionForm.style.display = 'none';
+                    connectionRequired.forEach(el => el.style.display = 'block');
+                    
+                    connectionInfo.innerHTML = `
+                        <p><strong>Database:</strong> ${database}</p>
+                        <p><strong>Status:</strong> <span style="color: var(--success-color);">Connected</span></p>
+                    `;
+                } else {
+                    connectionForm.style.display = 'block';
+                    connectionRequired.forEach(el => el.style.display = 'none');
+                }
+            }
+
             initializeMobileMenu() {
                 const mobileToggle = document.getElementById('mobileMenuToggle');
                 const sidebar = document.getElementById('sidebar');
@@ -1398,6 +1669,11 @@
                 const question = chatInput.value.trim();
 
                 if (!question) {
+                    return;
+                }
+
+                if (!this.isConnected) {
+                    this.addAssistantMessage('Please connect to a database first. Use the connection form in the sidebar to connect to your MySQL database.');
                     return;
                 }
 
