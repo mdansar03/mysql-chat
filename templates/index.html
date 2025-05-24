@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySQL AI Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary-color: #0f172a;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --border-color: #e2e8f0;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-size: 16px;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-primary);
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 320px;
+            background-color: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .logo i {
+            font-size: 28px;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            background-color: var(--bg-primary);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-secondary);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tables-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--bg-secondary);
+        }
+
+        .table-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+
+        .table-item:last-child {
+            border-bottom: none;
+        }
+
+        .table-item:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        .table-item.selected {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--error-color);
+        }
+
+        .status-info {
+            background-color: rgba(99, 102, 241, 0.1);
+            color: var(--primary-color);
+        }
+
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .main-header {
+            background-color: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .main-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 32px 32px 0 32px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 120px; /* Space for fixed input area */
+        }
+
+        .message {
+            margin-bottom: 24px;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-wrapper {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background-color: var(--bg-tertiary);
+            color: var(--primary-color);
+        }
+
+        .message-content {
+            flex: 1;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .message-author {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .message-text {
+            font-size: 15px;
+            line-height: 1.8;
+            color: var(--text-primary);
+        }
+
+        .message.user .message-text {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            display: inline-block;
+        }
+
+        .message.assistant .message-text {
+            background-color: var(--bg-primary);
+            padding: 20px;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Data Display Styles */
+        .data-section {
+            margin-top: 16px;
+            padding: 20px;
+            background-color: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .data-summary {
+            margin-bottom: 20px;
+            padding: 16px;
+            background-color: rgba(99, 102, 241, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .data-summary h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        .data-insight {
+            margin-bottom: 20px;
+            line-height: 1.8;
+        }
+
+        .data-point {
+            margin-bottom: 16px;
+            padding: 16px;
+            background-color: var(--bg-primary);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .data-point:hover {
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .sql-query {
+            margin: 16px 0;
+            padding: 16px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 6px 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-button:hover {
+            background-color: var(--primary-dark);
+        }
+
+        /* Input Area Styles */
+        .input-container {
+            background-color: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            padding: 24px 32px;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            gap: 16px;
+            align-items: flex-end;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            font-size: 15px;
+            resize: none;
+            transition: all 0.2s ease;
+            background-color: var(--bg-secondary);
+            min-height: 56px;
+            max-height: 200px;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background-color: var(--bg-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .send-button {
+            padding: 16px 24px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-button:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Export Buttons */
+        .export-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .export-btn:hover {
+            background-color: var(--bg-tertiary);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Loading Animation */
+        .loading-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            background-color: var(--primary-color);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+            }
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        /* Performance Info */
+        .performance-info {
+            margin-top: 16px;
+            padding: 16px;
+            background-color: rgba(245, 158, 11, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid var(--warning-color);
+            font-size: 14px;
+        }
+
+        .performance-info h5 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--warning-color);
+            margin-bottom: 8px;
+        }
+
+        .performance-info p {
+            margin-bottom: 4px;
+            color: var(--text-secondary);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 280px;
+            }
+            
+            .chat-container {
+                padding: 24px 24px 0 24px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 50vh;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                overflow-y: auto;
+                position: relative;
+                z-index: 50;
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.collapsed {
+                transform: translateY(-100%);
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+            }
+
+            .mobile-menu-toggle {
+            display: flex;
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                z-index: 1000;
+                background-color: var(--primary-color);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 15px;
+                cursor: pointer;
+                box-shadow: var(--shadow-md);
+            }
+
+            .main-content {
+            flex: 1;
+                min-height: 0;
+            }
+
+            .main-header {
+                padding: 16px;
+                font-size: 18px;
+            }
+
+            .main-title {
+                font-size: 18px;
+            }
+
+            .chat-container {
+                padding: 16px 16px 0 16px;
+                height: 100%;
+            }
+
+            .messages-container {
+                margin-bottom: 100px;
+                padding-bottom: 16px;
+            }
+
+            .input-container {
+                padding: 16px;
+                box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+            }
+
+            .input-wrapper {
+                gap: 12px;
+            }
+
+            .input-field {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 12px 16px;
+                min-height: 48px;
+            }
+
+            .send-button {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+
+            .message-wrapper {
+                gap: 12px;
+            }
+
+            .message-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 18px;
+                border-radius: 10px;
+            }
+
+            .message.user .message-text {
+                max-width: 85%;
+                margin-left: auto;
+                font-size: 14px;
+                padding: 12px 16px;
+            }
+
+            .message.assistant .message-text {
+                font-size: 14px;
+                padding: 16px;
+            }
+
+            .sidebar-header {
+                padding: 16px;
+            }
+
+            .logo {
+                font-size: 18px;
+            }
+
+            .logo i {
+                font-size: 24px;
+            }
+
+            .sidebar-content {
+                padding: 16px;
+            }
+
+            .sidebar-section {
+                margin-bottom: 20px;
+            }
+
+            .section-title {
+                font-size: 12px;
+                margin-bottom: 12px;
+            }
+
+            .form-group {
+                margin-bottom: 16px;
+            }
+
+            .form-label {
+                font-size: 13px;
+                margin-bottom: 6px;
+            }
+
+            .form-input {
+                padding: 10px 14px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            .btn {
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+
+            .tables-list {
+                max-height: 150px;
+        }
+
+        .table-item {
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+
+            .data-section {
+                padding: 16px;
+                margin-top: 12px;
+            }
+
+            .data-point {
+                padding: 12px;
+                margin-bottom: 12px;
+                font-size: 13px;
+            }
+
+            .data-point p {
+                margin-bottom: 6px;
+            }
+
+            .sql-query {
+                margin: 12px 0;
+            padding: 12px;
+                font-size: 12px;
+            }
+
+            .copy-button {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+
+            .export-actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .export-btn {
+            width: 100%;
+                justify-content: center;
+                padding: 10px 16px;
+                font-size: 13px;
+        }
+
+            .performance-info {
+                margin-top: 12px;
+            padding: 12px;
+                font-size: 12px;
+            }
+
+            .performance-info h5 {
+                font-size: 13px;
+                margin-bottom: 6px;
+            }
+
+            .performance-info p {
+                margin-bottom: 3px;
+            }
+
+            /* Hide desktop-only elements */
+            .desktop-only {
+                display: none;
+            }
+
+            /* Show mobile-only elements */
+            .mobile-only {
+                display: block;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .message.user .message-wrapper {
+                flex-direction: row-reverse;
+            }
+
+            .message.user .message-avatar {
+                display: none;
+            }
+
+            .message.user .message-content {
+            display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+            }
+
+            .message.assistant .message-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
+
+            .input-container {
+                padding: 12px;
+            }
+
+            .input-field {
+                font-size: 16px;
+                padding: 10px 14px;
+            }
+
+            .send-button {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+
+            .send-button span {
+                display: none;
+            }
+
+            .send-button i {
+                margin: 0;
+            }
+        }
+
+        @media (max-height: 600px) and (max-width: 768px) {
+            .sidebar {
+                max-height: 40vh;
+            }
+
+            .messages-container {
+                margin-bottom: 90px;
+            }
+
+            .input-container {
+                padding: 12px;
+            }
+
+            .input-field {
+                min-height: 44px;
+                padding: 10px 14px;
+            }
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            .input-field {
+                font-size: 16px !important; /* Prevents zoom */
+            }
+
+            .form-input {
+                font-size: 16px !important; /* Prevents zoom */
+            }
+
+            /* Fix for iOS Safari bottom bar */
+            .input-container {
+                padding-bottom: env(safe-area-inset-bottom, 16px);
+            }
+        }
+
+        /* Utility classes for mobile */
+        .mobile-only {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-only {
+                display: initial;
+            }
+
+            .desktop-only {
+                display: none !important;
+            }
+        }
+
+        /* Improve touch targets for mobile */
+        @media (hover: none) and (pointer: coarse) {
+            .btn {
+                min-height: 44px;
+            }
+
+            .table-item {
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+            }
+
+            .export-btn {
+                min-height: 44px;
+            }
+
+            .send-button {
+                min-width: 44px;
+                min-height: 44px;
+            }
+        }
+
+        /* Landscape mode adjustments */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .sidebar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 100;
+                max-height: 100vh;
+                transform: translateY(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateY(0);
+            }
+
+            .main-header {
+                padding: 12px 16px;
+            }
+
+            .messages-container {
+                margin-bottom: 80px;
+            }
+
+            .input-container {
+                padding: 10px 16px;
+            }
+
+            .input-field {
+                min-height: 40px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+
+            .message-text {
+                font-size: 13px;
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+        
+        /* AI Response Formatting */
+        .ai-response p {
+            margin: 12px 0;
+            line-height: 1.8;
+        }
+        
+        .ai-response ul, .ai-response ol {
+            margin: 12px 0;
+            padding-left: 24px;
+        }
+        
+        .ai-response li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        .ai-response strong {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .ai-response em {
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+        
+        .ai-analysis-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .ai-analysis-box h4 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: var(--primary-color);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .ai-analysis-box {
+                padding: 16px;
+                margin-bottom: 16px;
+            }
+            
+            .ai-analysis-box h4 {
+                font-size: 15px;
+            }
+            
+            .ai-response p, .ai-response li {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle mobile-only" id="mobileMenuToggle" style="display: none;">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-database"></i>
+                    <span>MySQL AI Assistant</span>
+                </div>
+        </div>
+
+            <div class="sidebar-content">
+                <!-- Database Connection -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Database Setup</h3>
+                
+                <div class="form-group">
+                        <label class="form-label" for="tableInput">Table Name</label>
+                        <input 
+                            type="text" 
+                            id="tableInput" 
+                            class="form-input" 
+                            placeholder="Enter table name"
+                        >
+                </div>
+
+                <div class="form-group">
+                        <button id="processTableBtn" class="btn btn-primary">
+                            <i class="fas fa-cog"></i>
+                            Process Table
+                    </button>
+                </div>
+
+                <div class="form-group">
+                        <button id="loadTablesBtn" class="btn btn-secondary">
+                            <i class="fas fa-sync-alt"></i>
+                            Load Tables
+                    </button>
+                    </div>
+                </div>
+
+                <!-- Available Tables -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Available Tables</h3>
+                    <div id="tablesList" class="tables-list">
+                        <div class="table-item" style="text-align: center; color: var(--text-secondary);">
+                            No tables loaded
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Status</h3>
+                    <div id="statusIndicator" class="status-badge status-info">
+                        <i class="fas fa-info-circle"></i>
+                        Ready to connect
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="main-header">
+                <h1 class="main-title">Database Assistant</h1>
+            </div>
+
+            <div class="chat-container">
+                <div id="chatMessages" class="messages-container">
+                    <!-- Welcome Message -->
+                    <div class="message assistant">
+                        <div class="message-wrapper">
+                            <div class="message-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="message-content">
+                        <div class="message-header">
+                                    <span class="message-author">AI Assistant</span>
+                                    <span class="message-time">${new Date().toLocaleTimeString()}</span>
+                        </div>
+                                <div class="message-text">
+                                    <p>Hello! I'm your MySQL AI Assistant. I can help you explore and analyze your database using natural language.</p>
+                                    <br>
+                                    <p><strong>To get started:</strong></p>
+                                    <ol style="margin-left: 20px; margin-top: 10px;">
+                                        <li>Enter your table name or click "Load Tables" to see available tables</li>
+                                        <li>Click "Process Table" to analyze the table structure</li>
+                                        <li>Ask me anything about your data in plain English!</li>
+                        </ol>
+                                    <br>
+                                    <p><strong>Example questions you can ask:</strong></p>
+                                    <ul style="margin-left: 20px; margin-top: 10px;">
+                                        <li>"Show me information about user John"</li>
+                                        <li>"What are the details of customer with email john@example.com"</li>
+                                        <li>"Find all orders placed this month"</li>
+                                        <li>"Give me the top performing products"</li>
+                        </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+
+            <!-- Input Area -->
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="chatInput" 
+                        class="input-field" 
+                        placeholder="Ask me anything about your data..."
+                        rows="1"
+                    ></textarea>
+                    <button id="sendBtn" class="send-button">
+                        <i class="fas fa-paper-plane"></i>
+                        Send
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        class MySQLAssistant {
+            constructor() {
+                this.currentTable = '';
+                this.resultsCache = {};
+                this.sidebarCollapsed = false;
+                this.initializeEventListeners();
+                this.initializeMobileMenu();
+            }
+
+            initializeEventListeners() {
+                // Process table button
+                document.getElementById('processTableBtn').addEventListener('click', () => {
+                    this.processTable();
+                });
+
+                // Load tables button
+                document.getElementById('loadTablesBtn').addEventListener('click', () => {
+                    this.loadAvailableTables();
+                });
+
+                // Send message button
+                document.getElementById('sendBtn').addEventListener('click', () => {
+                    this.sendMessage();
+                });
+
+                // Enter key in chat input
+                document.getElementById('chatInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Auto-resize textarea
+                document.getElementById('chatInput').addEventListener('input', (e) => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                });
+
+                // Table input enter key
+                document.getElementById('tableInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.processTable();
+                    }
+                });
+            }
+            
+            initializeMobileMenu() {
+                const mobileToggle = document.getElementById('mobileMenuToggle');
+                const sidebar = document.getElementById('sidebar');
+                
+                if (window.innerWidth <= 768) {
+                    mobileToggle.style.display = 'flex';
+                    sidebar.classList.add('collapsed');
+                    this.sidebarCollapsed = true;
+                }
+                
+                mobileToggle.addEventListener('click', () => {
+                    this.toggleSidebar();
+                });
+                
+                // Close sidebar when clicking outside on mobile
+                document.addEventListener('click', (e) => {
+                    if (window.innerWidth <= 768 && 
+                        !sidebar.contains(e.target) && 
+                        !mobileToggle.contains(e.target) &&
+                        !this.sidebarCollapsed) {
+                        this.toggleSidebar();
+                    }
+                });
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    if (window.innerWidth > 768) {
+                        mobileToggle.style.display = 'none';
+                        sidebar.classList.remove('collapsed');
+                        this.sidebarCollapsed = false;
+                    } else {
+                        mobileToggle.style.display = 'flex';
+                        if (!this.sidebarCollapsed) {
+                            sidebar.classList.add('collapsed');
+                            this.sidebarCollapsed = true;
+                        }
+                    }
+                });
+            }
+            
+            toggleSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                const mobileToggle = document.getElementById('mobileMenuToggle');
+                const body = document.body;
+                
+                if (this.sidebarCollapsed) {
+                    sidebar.classList.remove('collapsed');
+                    mobileToggle.innerHTML = '<i class="fas fa-times"></i>';
+                    this.sidebarCollapsed = false;
+                    // Prevent body scroll when sidebar is open
+                    body.style.overflow = 'hidden';
+                } else {
+                    sidebar.classList.add('collapsed');
+                    mobileToggle.innerHTML = '<i class="fas fa-bars"></i>';
+                    this.sidebarCollapsed = true;
+                    // Re-enable body scroll
+                    body.style.overflow = '';
+                }
+            }
+
+            async loadAvailableTables() {
+                const loadBtn = document.getElementById('loadTablesBtn');
+                const tablesList = document.getElementById('tablesList');
+                
+                loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                loadBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/get_tables');
+                    const data = await response.json();
+
+                    if (response.ok && data.tables) {
+                        this.displayTablesList(data.tables);
+                        this.updateStatus('Tables loaded successfully', 'success');
+                    } else {
+                        this.updateStatus(data.error || 'Failed to load tables', 'error');
+                        tablesList.innerHTML = '<div class="table-item" style="text-align: center; color: var(--text-secondary);">Failed to load tables</div>';
+                    }
+                } catch (error) {
+                    console.error('Error loading tables:', error);
+                    this.updateStatus('Connection error', 'error');
+                    tablesList.innerHTML = '<div class="table-item" style="text-align: center; color: var(--text-secondary);">Connection error</div>';
+                } finally {
+                    loadBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Load Tables';
+                    loadBtn.disabled = false;
+                }
+            }
+
+            displayTablesList(tables) {
+                const tablesList = document.getElementById('tablesList');
+                
+                if (tables.length === 0) {
+                    tablesList.innerHTML = '<div class="table-item" style="text-align: center; color: var(--text-secondary);">No tables found</div>';
+                    return;
+                }
+
+                tablesList.innerHTML = tables.map(table => 
+                    `<div class="table-item" data-table="${table}">
+                        <i class="fas fa-table" style="margin-right: 8px; color: var(--text-secondary);"></i>
+                        ${table}
+                    </div>`
+                ).join('');
+
+                // Add click listeners to table items
+                tablesList.querySelectorAll('.table-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        // Remove previous selection
+                        tablesList.querySelectorAll('.table-item').forEach(i => i.classList.remove('selected'));
+                        
+                        // Select current item
+                        item.classList.add('selected');
+                        
+                        // Update table input
+                        const tableName = item.getAttribute('data-table');
+                        document.getElementById('tableInput').value = tableName;
+                        this.currentTable = tableName;
+                        
+                        // On mobile, collapse sidebar after selection
+                        if (window.innerWidth <= 768 && !this.sidebarCollapsed) {
+                            setTimeout(() => this.toggleSidebar(), 300);
+                        }
+                    });
+                });
+            }
+
+            async processTable() {
+                const tableInput = document.getElementById('tableInput');
+                const processBtn = document.getElementById('processTableBtn');
+                const tableName = tableInput.value.trim();
+
+                if (!tableName) {
+                    this.updateStatus('Please enter a table name', 'error');
+                    return;
+                }
+
+                processBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                processBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/process_table', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ table_name: tableName })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        this.currentTable = tableName;
+                        this.updateStatus(`Table "${tableName}" processed`, 'success');
+                        this.addAssistantMessage(`Great! I've analyzed the <strong>${tableName}</strong> table and I'm ready to help you explore your data. Feel free to ask me anything about the information stored in this table.`);
+                        
+                        // On mobile, collapse sidebar after successful processing
+                        if (window.innerWidth <= 768 && !this.sidebarCollapsed) {
+                            setTimeout(() => this.toggleSidebar(), 500);
+                        }
+                    } else {
+                        this.updateStatus(data.error || 'Failed to process table', 'error');
+                        this.addAssistantMessage(`I encountered an issue while processing the <strong>${tableName}</strong> table. ${data.error || 'Please check if the table exists and try again.'}`);
+                    }
+                } catch (error) {
+                    console.error('Error processing table:', error);
+                    this.updateStatus('Connection error', 'error');
+                    this.addAssistantMessage('I\'m having trouble connecting to the database. Please check your connection and try again.');
+                } finally {
+                    processBtn.innerHTML = '<i class="fas fa-cog"></i> Process Table';
+                    processBtn.disabled = false;
+                }
+            }
+
+            async sendMessage() {
+                const chatInput = document.getElementById('chatInput');
+                const sendBtn = document.getElementById('sendBtn');
+                const question = chatInput.value.trim();
+
+                if (!question) {
+                    return;
+                }
+
+                if (!this.currentTable) {
+                    this.addAssistantMessage('Please select and process a table first. You can click "Load Tables" to see available tables in your database.');
+                    return;
+                }
+
+                // Add user message
+                this.addUserMessage(question);
+
+                // Clear input
+                chatInput.value = '';
+                chatInput.style.height = 'auto';
+
+                // Disable send button
+                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                sendBtn.disabled = true;
+
+                // Show typing indicator
+                this.showTypingIndicator();
+
+                try {
+                    const response = await fetch('/api/query', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            question: question,
+                            table_name: this.currentTable
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // Remove typing indicator
+                    this.removeTypingIndicator();
+
+                    if (response.ok && data.success) {
+                        this.displayQueryResult(data);
+                    } else {
+                        this.addAssistantMessage(`I couldn't process your query. ${data.error || 'Please try rephrasing your question.'}`);
+                        if (data.generated_query) {
+                            this.addSQLQuery(data.generated_query);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error sending query:', error);
+                    this.removeTypingIndicator();
+                    this.addAssistantMessage('I\'m having trouble processing your request. Please check your connection and try again.');
+                } finally {
+                    sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+                    sendBtn.disabled = false;
+                }
+            }
+
+            addUserMessage(message) {
+                const chatMessages = document.getElementById('chatMessages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message user';
+                messageDiv.innerHTML = `
+                    <div class="message-wrapper">
+                        <div class="message-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="message-content">
+                    <div class="message-header">
+                                <span class="message-author">You</span>
+                                <span class="message-time">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                            <div class="message-text">${this.escapeHtml(message)}</div>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            addAssistantMessage(message, isAIResponse = false) {
+                const chatMessages = document.getElementById('chatMessages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message assistant';
+                messageDiv.innerHTML = `
+                    <div class="message-wrapper">
+                        <div class="message-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                    <div class="message-header">
+                                <span class="message-author">AI Assistant</span>
+                                <span class="message-time">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                            <div class="message-text">${isAIResponse ? this.formatAIResponse(message) : message}</div>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            displayQueryResult(data) {
+                const resultId = 'result_' + Date.now();
+                this.resultsCache[resultId] = data.results;
+
+                let messageContent = '<div class="message-text">';
+
+                // Add AI Summary if available
+                if (data.ai_summary) {
+                    messageContent += `<div class="ai-analysis-box">
+                        <h4>
+                            <i class="fas fa-robot"></i> AI Analysis
+                        </h4>
+                        <div class="ai-response">
+                            ${this.formatAIResponse(data.ai_summary)}
+                        </div>
+                    </div>`;
+                }
+
+                // Add SQL Query
+                messageContent += `
+                    <div class="sql-query">
+                        <button class="copy-button" onclick="window.assistant.copyToClipboard(this, \`${data.generated_query.replace(/`/g, '\\`')}\`)">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <pre>${this.escapeHtml(data.generated_query)}</pre>
+                    </div>
+                `;
+
+                // Display results as conversational text
+                if (data.results && data.results.length > 0) {
+                    messageContent += `<div class="data-section">`;
+                    
+                    if (data.row_count === 1) {
+                        // Single result - detailed view
+                        messageContent += this.formatSingleResult(data.results[0]);
+                    } else {
+                        // Multiple results - summary view
+                        messageContent += this.formatMultipleResults(data.results, data.row_count);
+                    }
+                    
+                    // Add export buttons
+                    messageContent += `
+                        <div class="export-actions">
+                            <button class="export-btn" onclick="window.assistant.exportToCSV('${resultId}', '${data.question}')">
+                                <i class="fas fa-file-csv"></i> Export CSV
+                            </button>
+                            <button class="export-btn" onclick="window.assistant.exportToJSON('${resultId}', '${data.question}')">
+                                <i class="fas fa-file-code"></i> Export JSON
+                            </button>
+                        </div>
+                    `;
+                    
+                    messageContent += `</div>`;
+                    
+                    // Add performance info if available
+                    if (data.performance && data.performance.optimization_suggestions && data.performance.optimization_suggestions.length > 0) {
+                        messageContent += `
+                            <div class="performance-info">
+                                <h5><i class="fas fa-tachometer-alt"></i> Performance Analysis</h5>
+                                <p>Execution time: ${data.performance.execution_time}</p>
+                                <p>Rows examined: ${data.performance.estimated_rows_examined}</p>
+                                ${data.performance.optimization_suggestions.map(s => `<p>• ${s}</p>`).join('')}
+                            </div>
+                        `;
+                    }
+                } else {
+                    messageContent += '<p><em>No data found matching your query.</em></p>';
+                }
+
+                messageContent += '</div>';
+
+                const chatMessages = document.getElementById('chatMessages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message assistant';
+                messageDiv.innerHTML = `
+                    <div class="message-wrapper">
+                        <div class="message-avatar">
+                            <i class="fas fa-robot"></i>
+                            </div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-author">AI Assistant</span>
+                                <span class="message-time">${new Date().toLocaleTimeString()}</span>
+                            </div>
+                            ${messageContent}
+                            </div>
+                        </div>
+                    `;
+                chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            formatSingleResult(result) {
+                const fields = Object.entries(result);
+                let content = '<div class="data-insight">';
+                content += '<p>Here\'s the information I found:</p>';
+                content += '<div class="data-point">';
+                
+                fields.forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        content += `<p><strong>${this.formatFieldName(key)}:</strong> ${this.escapeHtml(String(value))}</p>`;
+                    }
+                });
+                
+                content += '</div>';
+                content += '</div>';
+                return content;
+            }
+
+            formatMultipleResults(results, totalCount) {
+                let content = '<div class="data-insight">';
+                const displayCount = Math.min(results.length, 10);
+                
+                content += `<p>I found <strong>${totalCount}</strong> ${totalCount === 1 ? 'result' : 'results'}. Here are the first ${displayCount}:</p>`;
+                
+                // Show first 10 results
+                for (let i = 0; i < displayCount; i++) {
+                    const result = results[i];
+                    content += '<div class="data-point">';
+                    
+                    // Show key fields only
+                    const keyFields = this.identifyKeyFields(result);
+                    keyFields.forEach(field => {
+                        if (result[field] !== null && result[field] !== undefined && result[field] !== '') {
+                            content += `<p><strong>${this.formatFieldName(field)}:</strong> ${this.escapeHtml(String(result[field]))}</p>`;
+                        }
+                    });
+                    
+                    content += '</div>';
+                }
+                
+                if (results.length > displayCount) {
+                    content += `<p style="margin-top: 16px; color: var(--text-secondary);"><em>...and ${results.length - displayCount} more results. Use the export buttons below to get all data.</em></p>`;
+                }
+                
+                content += '</div>';
+                return content;
+            }
+
+            identifyKeyFields(record) {
+                // Identify the most important fields to show
+                const allFields = Object.keys(record);
+                const priorityFields = ['id', 'name', 'email', 'title', 'username', 'date', 'created_at', 'amount', 'status', 'type'];
+                
+                // Get priority fields that exist in the record
+                const keyFields = priorityFields.filter(field => allFields.includes(field));
+                
+                // If we have less than 5 key fields, add more from the record
+                if (keyFields.length < 5) {
+                    const remainingFields = allFields.filter(field => !keyFields.includes(field));
+                    keyFields.push(...remainingFields.slice(0, 5 - keyFields.length));
+                }
+                
+                return keyFields.slice(0, 5); // Return maximum 5 fields
+            }
+
+            formatFieldName(field) {
+                return field
+                    .split('_')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+            }
+
+            showTypingIndicator() {
+                const chatMessages = document.getElementById('chatMessages');
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'message assistant typing-indicator';
+                typingDiv.innerHTML = `
+                    <div class="message-wrapper">
+                        <div class="message-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            <div class="message-text">
+                                <div class="loading-dots">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(typingDiv);
+                this.scrollToBottom();
+            }
+
+            removeTypingIndicator() {
+                const typingIndicator = document.querySelector('.typing-indicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+
+            addSQLQuery(query) {
+                const messageContent = `
+                    <div class="sql-query">
+                        <button class="copy-button" onclick="window.assistant.copyToClipboard(this, \`${query.replace(/`/g, '\\`')}\`)">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <pre>${this.escapeHtml(query)}</pre>
+                    </div>
+                `;
+                
+                const lastMessage = document.querySelector('.message.assistant:last-child .message-text');
+                if (lastMessage) {
+                    lastMessage.innerHTML += messageContent;
+                }
+            }
+
+            copyToClipboard(button, text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalContent = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    button.style.backgroundColor = 'var(--success-color)';
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalContent;
+                        button.style.backgroundColor = '';
+                    }, 2000);
+                });
+            }
+            
+            exportToCSV(resultId, filename = 'query_results') {
+                const results = this.resultsCache[resultId];
+                if (!results || results.length === 0) return;
+                
+                // Get headers
+                const headers = Object.keys(results[0]);
+                
+                // Build CSV content
+                let csvContent = headers.join(',') + '\n';
+                
+                results.forEach(row => {
+                    const values = headers.map(header => {
+                        const value = row[header];
+                        if (value === null || value === undefined) return '';
+                        const stringValue = String(value);
+                        if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+                            return `"${stringValue.replace(/"/g, '""')}"`;
+                        }
+                        return stringValue;
+                    });
+                    csvContent += values.join(',') + '\n';
+                });
+                
+                // Create blob and download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', `${filename.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                this.addAssistantMessage('I\'ve exported the data to CSV format for you. The download should start automatically.');
+            }
+            
+            exportToJSON(resultId, filename = 'query_results') {
+                const results = this.resultsCache[resultId];
+                if (!results || results.length === 0) return;
+                
+                // Create formatted JSON
+                const jsonContent = JSON.stringify(results, null, 2);
+                
+                // Create blob and download
+                const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', `${filename.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.json`);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                this.addAssistantMessage('I\'ve exported the data to JSON format for you. The download should start automatically.');
+            }
+
+            updateStatus(message, type) {
+                const statusIndicator = document.getElementById('statusIndicator');
+                const iconMap = {
+                    'success': 'fas fa-check-circle',
+                    'error': 'fas fa-exclamation-circle',
+                    'info': 'fas fa-info-circle'
+                };
+                
+                statusIndicator.className = `status-badge status-${type}`;
+                statusIndicator.innerHTML = `<i class="${iconMap[type]}"></i> ${message}`;
+            }
+
+            scrollToBottom() {
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // Smooth scroll on mobile
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        chatMessages.scrollTo({
+                            top: chatMessages.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }, 100);
+                }
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            formatAIResponse(text) {
+                // First escape HTML to prevent XSS
+                let formatted = this.escapeHtml(text);
+                
+                // Convert line breaks to proper HTML structure
+                // Double line breaks become paragraph breaks
+                const paragraphs = formatted.split(/\n\n+/);
+                formatted = paragraphs.map(para => {
+                    // Check if this paragraph is a list
+                    const trimmedPara = para.trim();
+                    
+                    // Handle bullet points
+                    if (trimmedPara.match(/^[-•*]\s+/m)) {
+                        const items = trimmedPara.split(/\n/).map(item => {
+                            const cleaned = item.replace(/^[-•*]\s+/, '').trim();
+                            return cleaned ? `<li>${cleaned}</li>` : '';
+                        }).filter(item => item);
+                        return items.length > 0 ? `<ul>${items.join('')}</ul>` : '';
+                    }
+                    
+                    // Handle numbered lists
+                    if (trimmedPara.match(/^\d+\.\s+/m)) {
+                        const items = trimmedPara.split(/\n/).map(item => {
+                            const cleaned = item.replace(/^\d+\.\s+/, '').trim();
+                            return cleaned ? `<li>${cleaned}</li>` : '';
+                        }).filter(item => item);
+                        return items.length > 0 ? `<ol>${items.join('')}</ol>` : '';
+                    }
+                    
+                    // Regular paragraph - convert single line breaks to <br>
+                    const withBreaks = trimmedPara.replace(/\n/g, '<br>');
+                    return trimmedPara ? `<p>${withBreaks}</p>` : '';
+                }).filter(para => para);
+                
+                formatted = formatted.join('');
+                
+                // Format text styling
+                // Bold text with **text**
+                formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                
+                // Italic text with *text* (but not if it's part of ** for bold)
+                formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+                
+                // Code blocks with `code`
+                formatted = formatted.replace(/`([^`]+)`/g, '<code style="background: #f5f5f5; padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');
+                
+                // Headers with # (if any)
+                formatted = formatted.replace(/<p>#{1,6}\s+(.+?)<\/p>/g, (match, content, offset, string) => {
+                    const level = match.match(/#/g).length;
+                    return `<h${level + 3} style="margin: 16px 0 8px 0; font-weight: 600;">${content}</h${level + 3}>`;
+                });
+                
+                return formatted;
+            }
+        }
+
+        // Initialize the assistant when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.assistant = new MySQLAssistant();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# Core Flask Dependencies
+flask==2.3.3
+flask-cors==4.0.0
+
+# Database Connectors
+mysql-connector-python==8.1.0
+
+# AI/ML Dependencies
+openai==1.35.3
+pinecone-client==2.2.4
+
+# HTTP Client (for OpenAI compatibility)
+httpx==0.24.1
+
+# Data Processing
+pandas==2.0.3
+numpy==1.24.3
+
+# Environment and Configuration
+python-dotenv==1.0.0
+
+# HTTP and Networking
+requests==2.31.0
+urllib3==2.0.4
+
+# Utility Libraries
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Optional: Development and Debugging (uncomment if needed)
+# pytest==7.4.0
+# pytest-flask==1.2.0
+# flask-testing==0.8.1
+
+# Optional: Production Server (uncomment for production deployment)
+# gunicorn==21.2.0
+# waitress==2.1.2
+
+# Optional: Logging and Monitoring (uncomment if needed)
+# structlog==23.1.0
+# python-json-logger==2.0.7
+
+# SQL Parsing
+sqlparse==0.4.4
+
+# Spell Checking
+python-Levenshtein==0.21.1
+Levenshtein==0.21.1
+
+# ============================================
+# Installation Instructions:
+# ============================================
+# 1. Create virtual environment:
+#    python -m venv venv
+#
+# 2. Activate virtual environment:
+#    Windows: venv\Scripts\activate
+#    macOS/Linux: source venv/bin/activate
+#
+# 3. Install dependencies:
+#    pip install -r requirements.txt
+#
+# 4. Verify installation:
+#    pip list
+# ============================================
