@@ -8,7 +8,6 @@ mysql-connector-python==8.1.0
 # AI/ML Dependencies
 openai==1.35.3
 pinecone-client==2.2.4
-pinecone-database>=2.2.1
 
 # HTTP Client (for OpenAI compatibility)
 httpx==0.24.1
