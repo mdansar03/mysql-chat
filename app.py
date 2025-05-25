@@ -263,11 +263,10 @@ class MySQLSchemaProcessor:
             logger.error(f"Error creating embeddings: {str(e)}")
             return []
     
-    def chunk_schema_data(self, schema_info: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Create meaningful chunks from schema information"""
+    def chunk_schema_data(self, schema_info: Dict[str, Any], database_name: str) -> List[Dict[str, Any]]:
+        """Create meaningful chunks from schema information, including database name in IDs and metadata"""
         chunks = []
         table_name = schema_info['table_name']
-        
         # Main table description chunk
         main_description = f"""
         Table: {table_name}
@@ -275,7 +274,6 @@ class MySQLSchemaProcessor:
         
         Columns:
         """
-        
         for col in schema_info['columns']:
             main_description += f"""
         - {col['COLUMN_NAME']}: {col['DATA_TYPE']}
@@ -284,17 +282,16 @@ class MySQLSchemaProcessor:
           Default: {col['COLUMN_DEFAULT'] or 'None'}
           Comment: {col['COLUMN_COMMENT'] or 'None'}
         """
-        
         chunks.append({
-            'id': f"{table_name}_main_schema",
+            'id': f"{database_name}_{table_name}_main_schema",
             'content': main_description,
             'metadata': {
+                'database_name': database_name,
                 'table_name': table_name,
                 'chunk_type': 'main_schema',
                 'row_count': schema_info['row_count']
             }
         })
-        
         # Foreign key relationships chunk
         if schema_info['foreign_keys']:
             fk_description = f"""
@@ -304,16 +301,15 @@ class MySQLSchemaProcessor:
                 fk_description += f"""
             - {fk['COLUMN_NAME']} references {fk['REFERENCED_TABLE_NAME']}.{fk['REFERENCED_COLUMN_NAME']}
             """
-            
             chunks.append({
-                'id': f"{table_name}_foreign_keys",
+                'id': f"{database_name}_{table_name}_foreign_keys",
                 'content': fk_description,
                 'metadata': {
+                    'database_name': database_name,
                     'table_name': table_name,
                     'chunk_type': 'foreign_keys'
                 }
             })
-        
         # Sample data chunk
         if schema_info['sample_data']:
             sample_description = f"""
@@ -321,40 +317,35 @@ class MySQLSchemaProcessor:
             """
             for i, row in enumerate(schema_info['sample_data'], 1):
                 sample_description += f"\nRow {i}: {json.dumps(row, default=str)}"
-            
             chunks.append({
-                'id': f"{table_name}_sample_data",
+                'id': f"{database_name}_{table_name}_sample_data",
                 'content': sample_description,
                 'metadata': {
+                    'database_name': database_name,
                     'table_name': table_name,
                     'chunk_type': 'sample_data'
                 }
             })
-        
         return chunks
     
     def store_table_schema(self, table_name: str):
-        """Process and store table schema in Pinecone"""
+        """Process and store table schema in Pinecone, using database name in IDs and metadata"""
         logger.info(f"Processing table: {table_name}")
-        
         # Get schema information
         schema_info = self.get_table_schema(table_name)
         if not schema_info:
             return False
-        
+        database_name = session.get('database_name', 'database')
         # Create chunks
-        chunks = self.chunk_schema_data(schema_info)
-        
+        chunks = self.chunk_schema_data(schema_info, database_name)
         # Create embeddings and store in Pinecone
         vectors_to_upsert = []
-        
         for chunk in chunks:
             try:
                 # Create embedding
                 embedding = self.create_embeddings(chunk['content'])
                 if not embedding:
                     continue
-                
                 # Create vector
                 vector = {
                     'id': chunk['id'],
@@ -366,11 +357,9 @@ class MySQLSchemaProcessor:
                     }
                 }
                 vectors_to_upsert.append(vector)
-                
             except Exception as e:
                 logger.error(f"Error processing chunk {chunk['id']}: {str(e)}")
                 continue
-        
         # Upsert to Pinecone
         if vectors_to_upsert:
             try:
@@ -380,23 +369,23 @@ class MySQLSchemaProcessor:
             except Exception as e:
                 logger.error(f"Error upserting vectors: {str(e)}")
                 return False
-        
         return False
     
     def query_similar_schemas(self, query: str, table_name: str = None, top_k: int = 5) -> List[Dict]:
-        """Query similar schema information from Pinecone"""
+        """Query similar schema information from Pinecone, filtering by database name and table name"""
         try:
             # Create query embedding
             query_embedding = self.create_embeddings(query)
             print(query_embedding, "query_embedding ============>")
             if not query_embedding:
                 return []
-            
             # Prepare filter
             filter_dict = {}
+            database_name = session.get('database_name', 'database')
             if table_name:
                 filter_dict['table_name'] = table_name
-            
+            if database_name:
+                filter_dict['database_name'] = database_name
             # Query Pinecone
             response = self.index.query(
                 vector=query_embedding,
@@ -404,9 +393,7 @@ class MySQLSchemaProcessor:
                 include_metadata=True,
                 filter=filter_dict if filter_dict else None
             )
-            
             return response.matches
-            
         except Exception as e:
             logger.error(f"Error querying Pinecone: {str(e)}")
             return []
