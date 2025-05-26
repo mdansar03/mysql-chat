@@ -20,6 +20,9 @@ import time
 from functools import lru_cache
 import Levenshtein
 import secrets
+import asyncio
+import concurrent.futures
+from threading import Lock
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,6 +48,22 @@ class Config:
     # Query Configuration
     MAX_QUERY_RESULTS = int(os.getenv('MAX_QUERY_RESULTS', '10000'))  # Maximum results to return
     DEFAULT_QUERY_LIMIT = int(os.getenv('DEFAULT_QUERY_LIMIT', '1000'))  # Default limit if not specified
+
+# Performance Configuration
+class PerformanceConfig:
+    # Cache settings
+    SCHEMA_CACHE_TTL = 3600  # 1 hour
+    EMBEDDING_CACHE_TTL = 1800  # 30 minutes
+    
+    # Performance settings
+    ENABLE_VECTOR_SEARCH = False  # Disable Pinecone for faster responses
+    ENABLE_PERFORMANCE_ANALYSIS = False  # Disable EXPLAIN queries
+    ENABLE_QUERY_VALIDATION = False  # Disable EXPLAIN validation
+    MAX_RETRIES = 1  # Reduce retries
+    
+    # AI settings
+    USE_FASTER_MODEL = True  # Use gpt-3.5-turbo instead of gpt-4
+    REDUCE_AI_CONTEXT = True  # Minimize prompt size
 
 # Initialize OpenAI
 try:
@@ -129,6 +148,46 @@ class ConnectionManager:
 
 # Initialize connection manager
 connection_manager = ConnectionManager()
+
+# Add caching infrastructure
+class CacheManager:
+    def __init__(self):
+        self.schema_cache = {}
+        self.embedding_cache = {}
+        self.column_cache = {}
+        self.lock = Lock()
+    
+    def get_schema(self, table_name: str, database_name: str):
+        key = f"{database_name}_{table_name}"
+        with self.lock:
+            return self.schema_cache.get(key)
+    
+    def set_schema(self, table_name: str, database_name: str, schema_data):
+        key = f"{database_name}_{table_name}"
+        with self.lock:
+            self.schema_cache[key] = {
+                'data': schema_data,
+                'timestamp': time.time()
+            }
+    
+    def get_columns(self, table_name: str, database_name: str):
+        key = f"{database_name}_{table_name}"
+        with self.lock:
+            cached = self.column_cache.get(key)
+            if cached and time.time() - cached['timestamp'] < PerformanceConfig.SCHEMA_CACHE_TTL:
+                return cached['data']
+        return None
+    
+    def set_columns(self, table_name: str, database_name: str, columns):
+        key = f"{database_name}_{table_name}"
+        with self.lock:
+            self.column_cache[key] = {
+                'data': columns,
+                'timestamp': time.time()
+            }
+
+# Initialize cache manager
+cache_manager = CacheManager()
 
 class MySQLSchemaProcessor:
     def __init__(self):
@@ -461,74 +520,97 @@ class MySQLSchemaProcessor:
             return {'error': str(e)}
     
     def generate_sql_query(self, user_question: str, table_name: str) -> str:
-        """Generate SQL query using OpenAI based on schema context with retry logic"""
-        max_retries = 3
+        """Generate SQL query using OpenAI with optimized performance"""
+        max_retries = PerformanceConfig.MAX_RETRIES
         retry_count = 0
-        previous_error = None  # Store previous error for retry context
+        previous_error = None
         
-        # Get table context for spell correction
+        # Get table context for spell correction (cached)
         table_columns = self.get_table_context(table_name)
         
-        # Correct spelling in user question (but preserve email addresses and special patterns)
-        corrected_question = self.correct_spelling_smart(user_question, table_columns)
-        
-        if corrected_question != user_question:
-            logger.info(f"Corrected question: '{user_question}' -> '{corrected_question}'")
+        # Skip spelling correction for performance
+        if not PerformanceConfig.REDUCE_AI_CONTEXT:
+            corrected_question = self.correct_spelling_smart(user_question, table_columns)
+            if corrected_question != user_question:
+                logger.info(f"Corrected question: '{user_question}' -> '{corrected_question}'")
+        else:
+            corrected_question = user_question
         
         while retry_count < max_retries:
             try:
-                # Get relevant schema information
-                schema_matches = self.query_similar_schemas(user_question, table_name, top_k=3)
-                logger.info(f"Found {len(schema_matches)} schema matches")
+                # Skip vector search for performance
+                if PerformanceConfig.ENABLE_VECTOR_SEARCH:
+                    schema_matches = self.query_similar_schemas(user_question, table_name, top_k=3)
+                    context = ""
+                    for match in schema_matches:
+                        context += f"\n{match.metadata.get('content', '')}\n"
+                else:
+                    # Use minimal context - just column names
+                    context = f"Table: {table_name}\nColumns: {', '.join(table_columns)}"
                 
-                # Build context from schema matches
-                context = ""
-                for match in schema_matches:
-                    context += f"\n{match.metadata.get('content', '')}\n"
-                
-                # Create prompt for SQL generation
-                prompt = f"""
-                You are a MySQL query generator. Based on the following database schema information and user question, generate a precise SELECT query.
-                
-                Database Schema Context:
-                {context}
-                
-                User Question: {user_question}
-                Target Table: {table_name}
-                
-                Available Columns: {', '.join(table_columns)}
-                
-                Important: If the user mentions specific values like email addresses, names, IDs, etc., use them EXACTLY as provided in WHERE clauses.
-                For example: 
-                - "details of moni@gmail.com" → WHERE email = 'moni@gmail.com'
-                - "find user john" → WHERE name = 'john' OR name LIKE '%john%'
-                
-                Rules:
-                1. Only generate SELECT queries
-                2. Use proper MySQL syntax
-                3. Include appropriate WHERE clauses if needed
-                4. Use JOINs if the question involves multiple tables
-                5. Include ORDER BY and LIMIT if appropriate
-                6. Return only the SQL query, no explanations
-                7. Ensure all column names are spelled correctly
-                8. For email addresses or specific values mentioned in the question, use them exactly as provided
-                9. When searching for a specific record by email or unique identifier, use exact match (=) not LIKE
-                
-                {f"Previous attempt failed with error: {previous_error}. Please fix the syntax and try again." if retry_count > 0 and previous_error else ""}
-                
-                SQL Query:
-                """
+                # Create optimized prompt
+                if PerformanceConfig.REDUCE_AI_CONTEXT:
+                    prompt = f"""Generate a MySQL SELECT query for this request:
+
+Table: {table_name}
+Columns: {', '.join(table_columns)}
+Question: {user_question}
+
+Rules:
+- Only SELECT queries
+- Use exact column names
+- For specific values (emails, names), use exact match with =
+- Return only the SQL query, no explanations
+
+SQL:"""
+                else:
+                    # Original detailed prompt
+                    prompt = f"""
+                    You are a MySQL query generator. Based on the following database schema information and user question, generate a precise SELECT query.
+                    
+                    Database Schema Context:
+                    {context}
+                    
+                    User Question: {user_question}
+                    Target Table: {table_name}
+                    
+                    Available Columns: {', '.join(table_columns)}
+                    
+                    Important: If the user mentions specific values like email addresses, names, IDs, etc., use them EXACTLY as provided in WHERE clauses.
+                    For example: 
+                    - "details of moni@gmail.com" → WHERE email = 'moni@gmail.com'
+                    - "find user john" → WHERE name = 'john' OR name LIKE '%john%'
+                    
+                    Rules:
+                    1. Only generate SELECT queries
+                    2. Use proper MySQL syntax
+                    3. Include appropriate WHERE clauses if needed
+                    4. Use JOINs if the question involves multiple tables
+                    5. Include ORDER BY and LIMIT if appropriate
+                    6. Return only the SQL query, no explanations
+                    7. Ensure all column names are spelled correctly
+                    8. For email addresses or specific values mentioned in the question, use them exactly as provided
+                    9. When searching for a specific record by email or unique identifier, use exact match (=) not LIKE
+                    
+                    {f"Previous attempt failed with error: {previous_error}. Please fix the syntax and try again." if retry_count > 0 and previous_error else ""}
+                    
+                    SQL Query:
+                    """
                 
                 if not client:
                     logger.error("OpenAI client not initialized")
                     previous_error = "OpenAI client not initialized"
                     retry_count += 1
                     continue
-                    
+                
+                # Use faster model if configured
+                model = "gpt-3.5-turbo" if PerformanceConfig.USE_FASTER_MODEL else "gpt-4"
+                max_tokens = 200 if PerformanceConfig.REDUCE_AI_CONTEXT else 800
+                
                 response = client.chat.completions.create(
-                    model="gpt-4",
+                    model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=800,
+                    max_tokens=max_tokens,
                     temperature=0
                 )
                 
@@ -541,16 +623,24 @@ class MySQLSchemaProcessor:
                 
                 logger.info(f"Generated SQL (attempt {retry_count + 1}): {sql_query}")
                 
-                # Validate the generated query
-                validation_result = self.validate_sql_syntax(sql_query)
-                
-                if validation_result['valid']:
-                    logger.info(f"Generated valid SQL query after {retry_count + 1} attempts")
-                    return validation_result.get('formatted_query', sql_query)
+                # Skip validation for performance if configured
+                if PerformanceConfig.ENABLE_QUERY_VALIDATION:
+                    validation_result = self.validate_sql_syntax(sql_query)
+                    
+                    if validation_result['valid']:
+                        logger.info(f"Generated valid SQL query after {retry_count + 1} attempts")
+                        return validation_result.get('formatted_query', sql_query)
+                    else:
+                        previous_error = validation_result['error']
+                        logger.warning(f"SQL validation failed (attempt {retry_count + 1}): {previous_error}")
+                        retry_count += 1
                 else:
-                    previous_error = validation_result['error']
-                    logger.warning(f"SQL validation failed (attempt {retry_count + 1}): {previous_error}")
-                    retry_count += 1
+                    # Basic validation only
+                    if sql_query.upper().strip().startswith('SELECT'):
+                        return sql_query
+                    else:
+                        previous_error = "Query must start with SELECT"
+                        retry_count += 1
                     
             except Exception as e:
                 logger.error(f"Error generating SQL query (attempt {retry_count + 1}): {str(e)}")
@@ -733,7 +823,14 @@ class MySQLSchemaProcessor:
     
     @lru_cache(maxsize=100)
     def get_table_context(self, table_name: str) -> List[str]:
-        """Get table column names for spelling correction context"""
+        """Get table column names for spelling correction context with caching"""
+        database_name = session.get('database_name', 'database')
+        
+        # Check cache first
+        cached_columns = cache_manager.get_columns(table_name, database_name)
+        if cached_columns:
+            return cached_columns
+        
         # Clear cache when a new connection is made
         if hasattr(self, '_last_connection_id') and self._last_connection_id != session.get('connection_id'):
             self.get_table_context.cache_clear()
@@ -749,6 +846,10 @@ class MySQLSchemaProcessor:
             cursor.execute(f"DESCRIBE {table_name}")
             columns = [row[0] for row in cursor.fetchall()]
             cursor.close()
+            
+            # Cache the result
+            cache_manager.set_columns(table_name, database_name, columns)
+            
             logger.info(f"Retrieved {len(columns)} columns for table {table_name}")
             return columns
         except Exception as e:
@@ -756,48 +857,63 @@ class MySQLSchemaProcessor:
             return []
     
     def enhance_response_with_ai(self, query_result: Dict[str, Any], user_question: str) -> str:
-        """Use AI to create a natural language response from query results"""
+        """Use AI to create a natural language response from query results with optimized performance"""
         try:
             # Prepare context from results
             if not query_result.get('data'):
                 return "No results found for your query."
             
-            # Limit data for API call
-            sample_data = query_result['data'][:10] if len(query_result['data']) > 10 else query_result['data']
+            # Limit data for API call - reduce further for performance
+            sample_size = 5 if PerformanceConfig.REDUCE_AI_CONTEXT else 10
+            sample_data = query_result['data'][:sample_size] if len(query_result['data']) > sample_size else query_result['data']
             
-            prompt = f"""
-            Based on the following database query results, provide a clear, natural language summary that answers the user's question.
+            # Create optimized prompt
+            if PerformanceConfig.REDUCE_AI_CONTEXT:
+                prompt = f"""Summarize these database results for the user's question: "{user_question}"
+
+Results ({len(sample_data)} of {query_result['row_count']} total):
+{json.dumps(sample_data, indent=1, default=str)[:1000]}
+
+Provide a brief, clear summary in 2-3 sentences."""
+            else:
+                # Original detailed prompt
+                prompt = f"""
+                Based on the following database query results, provide a clear, natural language summary that answers the user's question.
+                
+                User Question: {user_question}
+                
+                Query Results (showing {len(sample_data)} of {query_result['row_count']} total rows):
+                {json.dumps(sample_data, indent=2, default=str)}
+                
+                Please provide a conversational response that:
+                1. Directly answers the user's question
+                2. Highlights key insights from the data
+                3. Mentions any patterns or notable findings
+                4. Suggests relevant follow-up questions if appropriate
+                
+                Format your response in a clear, readable way:
+                - Use plain text without any HTML tags
+                - Start with a brief summary
+                - Use bullet points or numbered lists where appropriate
+                - Keep paragraphs short and focused
+                - If listing multiple items, format them clearly
+                
+                IMPORTANT:
+                - Be concise but complete - finish all sentences and thoughts
+                - Aim for 200-400 words for most responses
+                - If you have follow-up questions, list them as bullet points at the end
+                - DO NOT use HTML tags like <p>, <ul>, <li>, etc. Use plain text formatting only
+                - Use line breaks for paragraphs and bullet points like "•" or "-" for lists
+                """
             
-            User Question: {user_question}
-            
-            Query Results (showing {len(sample_data)} of {query_result['row_count']} total rows):
-            {json.dumps(sample_data, indent=2, default=str)}
-            
-            Please provide a conversational response that:
-            1. Directly answers the user's question
-            2. Highlights key insights from the data
-            3. Mentions any patterns or notable findings
-            4. Suggests relevant follow-up questions if appropriate
-            
-            Format your response in a clear, readable way:
-            - Use plain text without any HTML tags
-            - Start with a brief summary
-            - Use bullet points or numbered lists where appropriate
-            - Keep paragraphs short and focused
-            - If listing multiple items, format them clearly
-            
-            IMPORTANT:
-            - Be concise but complete - finish all sentences and thoughts
-            - Aim for 200-400 words for most responses
-            - If you have follow-up questions, list them as bullet points at the end
-            - DO NOT use HTML tags like <p>, <ul>, <li>, etc. Use plain text formatting only
-            - Use line breaks for paragraphs and bullet points like "•" or "-" for lists
-            """
+            # Use faster model and reduced tokens
+            model = "gpt-3.5-turbo" if PerformanceConfig.USE_FASTER_MODEL else "gpt-4"
+            max_tokens = 300 if PerformanceConfig.REDUCE_AI_CONTEXT else 1500
             
             response = client.chat.completions.create(
-                model="gpt-4",
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=1500,
+                max_tokens=max_tokens,
                 temperature=0.7
             )
             
@@ -985,7 +1101,7 @@ def process_table():
 
 @app.route('/api/query', methods=['POST'])
 def handle_query():
-    """Handle user queries with enhanced validation and AI responses"""
+    """Handle user queries with enhanced validation and AI responses - optimized for performance"""
     try:
         # Check if connected
         if not session.get('connection_id'):
@@ -998,14 +1114,16 @@ def handle_query():
         if not user_question or not table_name:
             return jsonify({'error': 'Question and table name are required'}), 400
         
-        print(user_question, "user_question ============>")
-        print(table_name, "table_name ============>")
+        logger.info(f"Processing query: {user_question} for table: {table_name}")
         
         # Start timer for performance tracking
         start_time = time.time()
         
-        # Generate SQL query with retry logic
+        # Generate SQL query with optimized performance
+        sql_generation_start = time.time()
         sql_query = processor.generate_sql_query(user_question, table_name)
+        sql_generation_time = time.time() - sql_generation_start
+        logger.info(f"SQL generation took: {sql_generation_time:.2f} seconds")
         
         if not sql_query:
             return jsonify({
@@ -1014,7 +1132,10 @@ def handle_query():
             }), 500
         
         # Execute query
+        query_execution_start = time.time()
         query_result = processor.execute_mysql_query(sql_query)
+        query_execution_time = time.time() - query_execution_start
+        logger.info(f"Query execution took: {query_execution_time:.2f} seconds")
         
         if 'error' in query_result:
             return jsonify({
@@ -1023,14 +1144,24 @@ def handle_query():
                 'suggestion': 'Query syntax is valid but execution failed. Check your data and permissions.'
             }), 400
         
-        # Analyze query performance
-        performance_analysis = processor.analyze_query_performance(sql_query)
+        # Skip performance analysis if disabled for better performance
+        if PerformanceConfig.ENABLE_PERFORMANCE_ANALYSIS:
+            performance_analysis_start = time.time()
+            performance_analysis = processor.analyze_query_performance(sql_query)
+            performance_analysis_time = time.time() - performance_analysis_start
+            logger.info(f"Performance analysis took: {performance_analysis_time:.2f} seconds")
+        else:
+            performance_analysis = {'execution_plan': [], 'suggestions': [], 'estimated_rows': 0}
         
         # Generate AI-enhanced response
+        ai_response_start = time.time()
         ai_response = processor.enhance_response_with_ai(query_result, user_question)
+        ai_response_time = time.time() - ai_response_start
+        logger.info(f"AI response generation took: {ai_response_time:.2f} seconds")
         
-        # Calculate execution time
-        execution_time = time.time() - start_time
+        # Calculate total execution time
+        total_execution_time = time.time() - start_time
+        logger.info(f"Total request processing time: {total_execution_time:.2f} seconds")
         
         return jsonify({
             'success': True,
@@ -1043,10 +1174,16 @@ def handle_query():
             'max_results': Config.MAX_QUERY_RESULTS,
             'ai_summary': ai_response,
             'performance': {
-                'execution_time': f"{execution_time:.2f} seconds",
+                'execution_time': f"{total_execution_time:.2f} seconds",
                 'execution_plan': performance_analysis.get('execution_plan', []),
                 'optimization_suggestions': performance_analysis.get('suggestions', []),
-                'estimated_rows_examined': performance_analysis.get('estimated_rows', 0)
+                'estimated_rows_examined': performance_analysis.get('estimated_rows', 0),
+                'timing_breakdown': {
+                    'sql_generation': f"{sql_generation_time:.2f}s",
+                    'query_execution': f"{query_execution_time:.2f}s",
+                    'ai_response': f"{ai_response_time:.2f}s",
+                    'total': f"{total_execution_time:.2f}s"
+                }
             }
         })
         
@@ -1077,6 +1214,56 @@ def get_tables():
     except Exception as e:
         logger.error(f"Error getting tables: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/performance_config', methods=['GET', 'POST'])
+def performance_config():
+    """Get or update performance configuration"""
+    if request.method == 'GET':
+        return jsonify({
+            'enable_vector_search': PerformanceConfig.ENABLE_VECTOR_SEARCH,
+            'enable_performance_analysis': PerformanceConfig.ENABLE_PERFORMANCE_ANALYSIS,
+            'enable_query_validation': PerformanceConfig.ENABLE_QUERY_VALIDATION,
+            'use_faster_model': PerformanceConfig.USE_FASTER_MODEL,
+            'reduce_ai_context': PerformanceConfig.REDUCE_AI_CONTEXT,
+            'max_retries': PerformanceConfig.MAX_RETRIES
+        })
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            
+            # Update configuration
+            if 'enable_vector_search' in data:
+                PerformanceConfig.ENABLE_VECTOR_SEARCH = bool(data['enable_vector_search'])
+            if 'enable_performance_analysis' in data:
+                PerformanceConfig.ENABLE_PERFORMANCE_ANALYSIS = bool(data['enable_performance_analysis'])
+            if 'enable_query_validation' in data:
+                PerformanceConfig.ENABLE_QUERY_VALIDATION = bool(data['enable_query_validation'])
+            if 'use_faster_model' in data:
+                PerformanceConfig.USE_FASTER_MODEL = bool(data['use_faster_model'])
+            if 'reduce_ai_context' in data:
+                PerformanceConfig.REDUCE_AI_CONTEXT = bool(data['reduce_ai_context'])
+            if 'max_retries' in data:
+                PerformanceConfig.MAX_RETRIES = max(1, int(data['max_retries']))
+            
+            logger.info(f"Performance configuration updated: {data}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Performance configuration updated',
+                'current_config': {
+                    'enable_vector_search': PerformanceConfig.ENABLE_VECTOR_SEARCH,
+                    'enable_performance_analysis': PerformanceConfig.ENABLE_PERFORMANCE_ANALYSIS,
+                    'enable_query_validation': PerformanceConfig.ENABLE_QUERY_VALIDATION,
+                    'use_faster_model': PerformanceConfig.USE_FASTER_MODEL,
+                    'reduce_ai_context': PerformanceConfig.REDUCE_AI_CONTEXT,
+                    'max_retries': PerformanceConfig.MAX_RETRIES
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error updating performance config: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

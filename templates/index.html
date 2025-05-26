@@ -107,6 +107,11 @@
             margin-bottom: 8px;
         }
 
+        .form-label input[type="checkbox"] {
+            margin-right: 8px;
+            transform: scale(1.1);
+        }
+
         .form-input {
             width: 100%;
             padding: 10px 16px;
@@ -1212,6 +1217,51 @@
                     </div>
                 </div>
 
+                <!-- Performance Settings -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Performance Settings</h3>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="useFasterModel" checked> 
+                            Use Faster Model (GPT-3.5)
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="reduceAiContext" checked> 
+                            Reduce AI Context
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="enableVectorSearch"> 
+                            Enable Vector Search
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="enablePerformanceAnalysis"> 
+                            Enable Performance Analysis
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button id="savePerformanceBtn" class="btn btn-secondary">
+                            <i class="fas fa-save"></i>
+                            Save Settings
+                        </button>
+                    </div>
+                    
+                    <div class="performance-info" style="margin-top: 16px; font-size: 12px;">
+                        <p><strong>Performance Mode:</strong> Optimized for speed (~3-5 seconds)</p>
+                        <p>Disable optimizations for more detailed analysis</p>
+                    </div>
+                </div>
+
                 <!-- Status -->
                 <div class="sidebar-section">
                     <h3 class="section-title">Status</h3>
@@ -1295,6 +1345,7 @@
                 this.initializeEventListeners();
                 this.initializeMobileMenu();
                 this.checkConnectionStatus();
+                this.loadPerformanceSettings();
             }
 
             initializeEventListeners() {
@@ -1315,6 +1366,11 @@
                 // Load tables button
                 document.getElementById('loadTablesBtn').addEventListener('click', () => {
                     this.loadAvailableTables();
+                });
+
+                // Performance settings button
+                document.getElementById('savePerformanceBtn').addEventListener('click', () => {
+                    this.savePerformanceSettings();
                 });
 
                 // Send message button
@@ -2303,6 +2359,62 @@
                 });
                 
                 return formatted;
+            }
+
+            async loadPerformanceSettings() {
+                try {
+                    const response = await fetch('/api/performance_config');
+                    const config = await response.json();
+                    
+                    if (response.ok) {
+                        document.getElementById('useFasterModel').checked = config.use_faster_model;
+                        document.getElementById('reduceAiContext').checked = config.reduce_ai_context;
+                        document.getElementById('enableVectorSearch').checked = config.enable_vector_search;
+                        document.getElementById('enablePerformanceAnalysis').checked = config.enable_performance_analysis;
+                    }
+                } catch (error) {
+                    console.error('Error loading performance settings:', error);
+                }
+            }
+
+            async savePerformanceSettings() {
+                const saveBtn = document.getElementById('savePerformanceBtn');
+                
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                saveBtn.disabled = true;
+
+                try {
+                    const settings = {
+                        use_faster_model: document.getElementById('useFasterModel').checked,
+                        reduce_ai_context: document.getElementById('reduceAiContext').checked,
+                        enable_vector_search: document.getElementById('enableVectorSearch').checked,
+                        enable_performance_analysis: document.getElementById('enablePerformanceAnalysis').checked,
+                        max_retries: 1
+                    };
+
+                    const response = await fetch('/api/performance_config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(settings)
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        this.updateStatus('Performance settings saved', 'success');
+                        this.addAssistantMessage('Performance settings have been updated. Your next queries will use the new configuration.');
+                    } else {
+                        this.updateStatus('Failed to save settings', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error saving performance settings:', error);
+                    this.updateStatus('Error saving settings', 'error');
+                } finally {
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Settings';
+                    saveBtn.disabled = false;
+                }
             }
         }
 
