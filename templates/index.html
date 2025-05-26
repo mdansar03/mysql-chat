@@ -1697,6 +1697,11 @@
                 this.showTypingIndicator();
 
                 try {
+                    console.log('Sending query request:', {
+                        question: question,
+                        table_name: this.currentTable
+                    });
+
                     const response = await fetch('/api/query', {
                         method: 'POST',
                         headers: {
@@ -1708,7 +1713,10 @@
                         })
                     });
 
+                    console.log('Received response status:', response.status);
+
                     const data = await response.json();
+                    console.log('Received response data:', data);
 
                     // Remove typing indicator
                     this.removeTypingIndicator();
@@ -1716,7 +1724,21 @@
                     if (response.ok && data.success) {
                         this.displayQueryResult(data);
                     } else {
-                        this.addAssistantMessage(`I couldn't process your query. ${data.error || 'Please try rephrasing your question.'}`);
+                        let errorMessage = 'I couldn\'t process your query. ';
+                        
+                        if (data.error) {
+                            errorMessage += data.error;
+                            console.error('Query error:', data.error);
+                        } else if (data.message) {
+                            errorMessage += data.message;
+                            console.error('Query message:', data.message);
+                        } else {
+                            errorMessage += 'Please try rephrasing your question.';
+                            console.error('Unknown query error:', data);
+                        }
+
+                        this.addAssistantMessage(errorMessage);
+                        
                         if (data.generated_query) {
                             this.addSQLQuery(data.generated_query);
                         }
@@ -1724,7 +1746,23 @@
                 } catch (error) {
                     console.error('Error sending query:', error);
                     this.removeTypingIndicator();
-                    this.addAssistantMessage('I\'m having trouble processing your request. Please check your connection and try again.');
+                    
+                    let errorMessage = 'I\'m having trouble processing your request. ';
+                    
+                    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                        errorMessage += 'The server appears to be unreachable. Please check if the server is running and try again.';
+                    } else if (error.name === 'SyntaxError') {
+                        errorMessage += 'There was an error parsing the server response. Please try again.';
+                    } else {
+                        errorMessage += 'Please check your connection and try again.';
+                    }
+                    
+                    this.addAssistantMessage(errorMessage);
+                    console.error('Detailed error:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
                 } finally {
                     sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
                     sendBtn.disabled = false;
@@ -1868,16 +1906,32 @@
             }
 
             formatSingleResult(result) {
-                const fields = Object.entries(result);
+                // Filter out null, undefined, and empty string values
+                const nonNullFields = Object.entries(result).filter(([_, value]) => 
+                    value !== null && value !== undefined && value !== ''
+                );
+
                 let content = '<div class="data-insight">';
-                content += '<p>Here\'s the information I found:</p>';
+                content += '<p>Here\'s the information:</p>';
                 content += '<div class="data-point">';
                 
-                fields.forEach(([key, value]) => {
-                    if (value !== null && value !== undefined && value !== '') {
-                        content += `<p><strong>${this.formatFieldName(key)}:</strong> ${this.escapeHtml(String(value))}</p>`;
+                // Group fields dynamically based on their names
+                const groups = this.groupFieldsDynamically(nonNullFields);
+                
+                // Display each group
+                for (const [groupName, fields] of Object.entries(groups)) {
+                    if (fields.length > 0) {
+                        content += `<div class="field-group ${groupName.toLowerCase()}">`;
+                        content += `<h4>${this.formatGroupName(groupName)}</h4>`;
+                        
+                        fields.forEach(([key, value]) => {
+                            const formattedValue = this.formatFieldValue(key, value);
+                            content += `<p><strong>${this.formatFieldName(key)}:</strong> ${formattedValue}</p>`;
+                        });
+                        
+                        content += '</div>';
                     }
-                });
+                }
                 
                 content += '</div>';
                 content += '</div>';
@@ -1886,20 +1940,22 @@
 
             formatMultipleResults(results, totalCount) {
                 let content = '<div class="data-insight">';
-                const displayCount = Math.min(results.length, 10);
+                const displayCount = Math.min(results.length, 20);
                 
                 content += `<p>I found <strong>${totalCount}</strong> ${totalCount === 1 ? 'result' : 'results'}. Here are the first ${displayCount}:</p>`;
                 
-                // Show first 10 results
+                // Get common non-null fields across all results
+                const commonFields = this.getCommonFields(results);
+                
+                // Show results
                 for (let i = 0; i < displayCount; i++) {
                     const result = results[i];
                     content += '<div class="data-point">';
                     
-                    // Show key fields only
-                    const keyFields = this.identifyKeyFields(result);
-                    keyFields.forEach(field => {
+                    commonFields.forEach(field => {
                         if (result[field] !== null && result[field] !== undefined && result[field] !== '') {
-                            content += `<p><strong>${this.formatFieldName(field)}:</strong> ${this.escapeHtml(String(result[field]))}</p>`;
+                            const formattedValue = this.formatFieldValue(field, result[field]);
+                            content += `<p><strong>${this.formatFieldName(field)}:</strong> ${formattedValue}</p>`;
                         }
                     });
                     
@@ -1914,28 +1970,129 @@
                 return content;
             }
 
-            identifyKeyFields(record) {
-                // Identify the most important fields to show
-                const allFields = Object.keys(record);
-                const priorityFields = ['id', 'name', 'email', 'title', 'username', 'date', 'created_at', 'amount', 'status', 'type'];
-                
-                // Get priority fields that exist in the record
-                const keyFields = priorityFields.filter(field => allFields.includes(field));
-                
-                // If we have less than 5 key fields, add more from the record
-                if (keyFields.length < 5) {
-                    const remainingFields = allFields.filter(field => !keyFields.includes(field));
-                    keyFields.push(...remainingFields.slice(0, 5 - keyFields.length));
+            groupFieldsDynamically(fields) {
+                const groups = {
+                    'Basic Information': [],
+                    'Contact Details': [],
+                    'Device Information': [],
+                    'Account Status': [],
+                    'Dates': [],
+                    'Identifiers': [],
+                    'Other': []
+                };
+
+                // Define field patterns for each group
+                const patterns = {
+                    'Basic Information': ['name', 'user_name', 'product_name'],
+                    'Contact Details': ['email', 'phone', 'address', 'city'],
+                    'Device Information': ['device', 'os', 'type', 'ip'],
+                    'Account Status': ['status', 'signed_up', 'login', 'active'],
+                    'Dates': ['date', 'created', 'modified', 'expired'],
+                    'Identifiers': ['id', 'uid', 'code', 'token']
+                };
+
+                fields.forEach(([key, value]) => {
+                    let assigned = false;
+                    
+                    // Try to match field to a group based on patterns
+                    for (const [group, groupPatterns] of Object.entries(patterns)) {
+                        if (groupPatterns.some(pattern => key.toLowerCase().includes(pattern))) {
+                            groups[group].push([key, value]);
+                            assigned = true;
+                            break;
+                        }
+                    }
+                    
+                    // If no group matched, add to Other
+                    if (!assigned) {
+                        groups['Other'].push([key, value]);
+                    }
+                });
+
+                // Remove empty groups
+                return Object.fromEntries(
+                    Object.entries(groups).filter(([_, fields]) => fields.length > 0)
+                );
+            }
+
+            getCommonFields(results) {
+                // Get all non-null fields from the first result
+                const firstResultFields = Object.entries(results[0])
+                    .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+                    .map(([key]) => key);
+
+                // Find fields that are non-null in all results
+                return firstResultFields.filter(field =>
+                    results.every(result => 
+                        result[field] !== null && 
+                        result[field] !== undefined && 
+                        result[field] !== ''
+                    )
+                );
+            }
+
+            formatFieldValue(field, value) {
+                // Format dates
+                if (field.toLowerCase().includes('date') || field.toLowerCase().includes('_at')) {
+                    try {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                            return date.toLocaleString();
+                        }
+                    } catch (e) {
+                        // If date parsing fails, return original value
+                    }
                 }
-                
-                return keyFields.slice(0, 5); // Return maximum 5 fields
+
+                // Format UIDs and IDs
+                if (field.toLowerCase().includes('uid') || field.toLowerCase().includes('id')) {
+                    return `<code style="background: #f5f5f5; padding: 2px 4px; border-radius: 3px; font-family: monospace;">${this.escapeHtml(String(value))}</code>`;
+                }
+
+                // Format status fields
+                if (field.toLowerCase().includes('status') || field.toLowerCase().includes('is_')) {
+                    const statusValue = parseInt(value);
+                    const statusText = statusValue === 1 ? 'Yes' : 'No';
+                    return `<span style="color: ${statusValue === 1 ? 'var(--success-color)' : 'var(--error-color)'};">${statusText}</span>`;
+                }
+
+                // Format email addresses
+                if (field.toLowerCase().includes('email')) {
+                    return `<a href="mailto:${value}" style="color: var(--primary-color);">${value}</a>`;
+                }
+
+                // Format phone numbers
+                if (field.toLowerCase().includes('phone')) {
+                    return `<a href="tel:${value}" style="color: var(--primary-color);">${value}</a>`;
+                }
+
+                // Format URLs
+                if (field.toLowerCase().includes('url') || field.toLowerCase().includes('image') || field.toLowerCase().includes('path')) {
+                    return `<a href="${value}" target="_blank" style="color: var(--primary-color);">${value}</a>`;
+                }
+
+                // Format boolean values
+                if (typeof value === 'boolean' || value === '0' || value === '1') {
+                    const boolValue = value === true || value === '1';
+                    return boolValue ? 
+                        '<span style="color: var(--success-color);">Yes</span>' : 
+                        '<span style="color: var(--text-secondary);">No</span>';
+                }
+
+                // Default formatting
+                return this.escapeHtml(String(value));
             }
 
             formatFieldName(field) {
+                // Convert field name to display format
                 return field
                     .split('_')
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                     .join(' ');
+            }
+
+            formatGroupName(group) {
+                return group;
             }
 
             showTypingIndicator() {

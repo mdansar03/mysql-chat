@@ -725,7 +725,7 @@ class MySQLSchemaProcessor:
                 'execution_plan': execution_plan,
                 'json_plan': json_plan,
                 'suggestions': suggestions,
-                'estimated_rows': sum(row.get('rows', 0) for row in execution_plan)
+                'estimated_rows': sum((row.get('rows') or 0) for row in execution_plan)
             }
             
         except Error as e:
